@@ -1,0 +1,674 @@
+openapi: 3.0.3
+info:
+  title: Finanzen API
+  description: >
+    Private Finanzverwaltung mit doppelter Buchhaltung, Kontenrahmen, Zahlungsempfängern,
+    wiederkehrenden Zahlungen, Prognosen und CSV-Import.
+  version: "1.0.0"
+servers:
+  - url: /api
+
+tags:
+  - name: Accounts
+  - name: Payees
+  - name: Transactions
+  - name: Recurring
+  - name: Forecast
+  - name: Reports
+  - name: Import
+
+paths:
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: Kontenrahmen als Baum (inkl. Saldo pro Konto)
+      responses:
+        "200":
+          description: Baumstruktur der Konten
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AccountNode" }
+    post:
+      tags: [Accounts]
+      summary: Neues Konto anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountCreateInput" }
+      responses:
+        "201":
+          description: Konto erstellt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /accounts/flat:
+    get:
+      tags: [Accounts]
+      summary: Aktive Konten als flache Liste (für Auswahlfelder)
+      responses:
+        "200":
+          description: Flache Kontenliste
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FlatAccount" }
+
+  /accounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    patch:
+      tags: [Accounts]
+      summary: Konto ändern (Name, übergeordnetes Konto, aktiv/inaktiv)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountUpdateInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Accounts]
+      summary: Konto löschen (nur ohne Buchungen/Unterkonten)
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /payees:
+    get:
+      tags: [Payees]
+      summary: Zahlungsempfänger mit Ausgaben-Summe
+      responses:
+        "200":
+          description: Liste der Zahlungsempfänger
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Payee" }
+    post:
+      tags: [Payees]
+      summary: Neuen Zahlungsempfänger anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "201":
+          description: Angelegt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+
+  /payees/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    patch:
+      tags: [Payees]
+      summary: Zahlungsempfänger umbenennen
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+    delete:
+      tags: [Payees]
+      summary: Zahlungsempfänger löschen (nur wenn ungenutzt)
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: Buchungen auflisten (mit Filtern)
+      parameters:
+        - name: account
+          in: query
+          schema: { type: integer }
+        - name: payee
+          in: query
+          schema: { type: integer }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Liste der Buchungen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Transaction" }
+    post:
+      tags: [Transactions]
+      summary: Neue Buchung erfassen (Postings müssen sich zu 0 summieren)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionInput" }
+      responses:
+        "201":
+          description: Buchung erstellt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /transactions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Transactions]
+      summary: Einzelne Buchung abrufen
+      responses:
+        "200":
+          description: Buchung
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Transactions]
+      summary: Buchung ändern
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Transactions]
+      summary: Buchung löschen
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+
+  /recurring:
+    get:
+      tags: [Recurring]
+      summary: Wiederkehrende Zahlungsvorlagen auflisten
+      responses:
+        "200":
+          description: Liste der Vorlagen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecurringTemplate" }
+    post:
+      tags: [Recurring]
+      summary: Neue wiederkehrende Vorlage anlegen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecurringTemplateInput" }
+      responses:
+        "201":
+          description: Angelegt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /recurring/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    patch:
+      tags: [Recurring]
+      summary: Vorlage ändern (auch pausieren/aktivieren)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecurringTemplateInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Recurring]
+      summary: Vorlage löschen
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+
+  /recurring/{id}/book:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    post:
+      tags: [Recurring]
+      summary: Fällige Zahlung jetzt als echte Buchung verbuchen
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date: { type: string, format: date, description: "Optional, Standard: nächster Fälligkeitstermin" }
+      responses:
+        "201":
+          description: Buchung erstellt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactionId: { type: integer }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /forecast:
+    get:
+      tags: [Forecast]
+      summary: Saldo-Prognose auf Basis wiederkehrender Zahlungen
+      parameters:
+        - name: months
+          in: query
+          description: Prognosehorizont in Monaten (1-24, Standard 6)
+          schema: { type: integer, minimum: 1, maximum: 24, default: 6 }
+      responses:
+        "200":
+          description: Prognose
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ForecastResponse" }
+
+  /reports/by-category:
+    get:
+      tags: [Reports]
+      summary: Auswertung nach Kategorie (Erträge/Aufwendungen-Konten)
+      parameters:
+        - $ref: "#/components/parameters/FromParam"
+        - $ref: "#/components/parameters/ToParam"
+      responses:
+        "200":
+          description: Kategorie-Auswertung
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CategoryReportRow" }
+
+  /reports/by-payee:
+    get:
+      tags: [Reports]
+      summary: Auswertung nach Zahlungsempfänger
+      parameters:
+        - $ref: "#/components/parameters/FromParam"
+        - $ref: "#/components/parameters/ToParam"
+      responses:
+        "200":
+          description: Zahlungsempfänger-Auswertung
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PayeeReportRow" }
+
+  /import/parse:
+    post:
+      tags: [Import]
+      summary: CSV-Text analysieren (Trennzeichen & Spaltenüberschriften erkennen)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [csvText]
+              properties:
+                csvText: { type: string }
+      responses:
+        "200":
+          description: Erkannte Struktur
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delimiter: { type: string }
+                  headers: { type: array, items: { type: string } }
+                  sampleRows:
+                    type: array
+                    items: { type: array, items: { type: string } }
+                  rowCount: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /import/preview:
+    post:
+      tags: [Import]
+      summary: CSV-Zeilen mit Spalten-Mapping in Buchungsvorschau umwandeln
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportPreviewInput" }
+      responses:
+        "200":
+          description: Vorschau-Zeilen mit Kategorie-Vorschlägen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items: { $ref: "#/components/schemas/ImportPreviewRow" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /import/commit:
+    post:
+      tags: [Import]
+      summary: Bestätigte Vorschau-Zeilen als Buchungen importieren
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportCommitInput" }
+      responses:
+        "201":
+          description: Import abgeschlossen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    FromParam:
+      name: from
+      in: query
+      schema: { type: string, format: date }
+    ToParam:
+      name: to
+      in: query
+      schema: { type: string, format: date }
+
+  responses:
+    Ok:
+      description: Erfolgreich
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok: { type: boolean }
+    NotFound:
+      description: Nicht gefunden
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    BadRequest:
+      description: Ungültige Anfrage
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+
+    IdResponse:
+      type: object
+      properties:
+        id: { type: integer }
+
+    AccountType:
+      type: string
+      enum: [asset, liability, equity, income, expense]
+
+    AccountNode:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/AccountType" }
+        parentId: { type: integer, nullable: true }
+        isActive: { type: boolean }
+        ownBalance: { type: integer, description: "Saldo in Cent, nur eigene Buchungszeilen" }
+        balance: { type: integer, description: "Saldo in Cent, inkl. Unterkonten" }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/AccountNode" }
+
+    FlatAccount:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/AccountType" }
+        parentId: { type: integer, nullable: true }
+        isActive: { type: boolean }
+        balance: { type: integer }
+
+    AccountCreateInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/AccountType" }
+        parentId: { type: integer, nullable: true }
+
+    AccountUpdateInput:
+      type: object
+      properties:
+        name: { type: string }
+        parentId: { type: integer, nullable: true }
+        isActive: { type: boolean }
+
+    Payee:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        expenseTotal: { type: integer, description: "Summe Ausgaben in Cent" }
+        transactionCount: { type: integer }
+
+    Posting:
+      type: object
+      properties:
+        id: { type: integer }
+        accountId: { type: integer }
+        accountName: { type: string }
+        amountCents:
+          type: integer
+          description: "Vorzeichenbehaftet: positiv = Geld fließt ins Konto, negativ = Geld fließt heraus"
+
+    PostingInput:
+      type: object
+      required: [accountId, amountCents]
+      properties:
+        accountId: { type: integer }
+        amountCents: { type: integer }
+
+    Transaction:
+      type: object
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        description: { type: string, nullable: true }
+        payeeId: { type: integer, nullable: true }
+        payeeName: { type: string, nullable: true }
+        postings:
+          type: array
+          items: { $ref: "#/components/schemas/Posting" }
+
+    TransactionInput:
+      type: object
+      required: [date, postings]
+      properties:
+        date: { type: string, format: date }
+        description: { type: string }
+        payeeId: { type: integer, nullable: true }
+        payeeName: { type: string, nullable: true }
+        postings:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/PostingInput" }
+          description: "Die Beträge aller Zeilen müssen sich zu 0 summieren."
+
+    RecurringInterval:
+      type: string
+      enum: [weekly, monthly, yearly]
+
+    RecurringTemplate:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        payeeId: { type: integer, nullable: true }
+        payeeName: { type: string, nullable: true }
+        fromAccountId: { type: integer }
+        fromAccountName: { type: string }
+        toAccountId: { type: integer }
+        toAccountName: { type: string }
+        amountCents: { type: integer }
+        interval: { $ref: "#/components/schemas/RecurringInterval" }
+        intervalDay: { type: integer, description: "Wochentag (0-6), Tag im Monat (1-31) oder Tag im Jahr (1-365), je nach interval" }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date, nullable: true }
+        active: { type: boolean }
+        lastBookedDate: { type: string, format: date, nullable: true }
+        nextDueDate: { type: string, format: date, nullable: true }
+
+    RecurringTemplateInput:
+      type: object
+      properties:
+        name: { type: string }
+        payeeId: { type: integer, nullable: true }
+        fromAccountId: { type: integer }
+        toAccountId: { type: integer }
+        amountCents: { type: integer }
+        interval: { $ref: "#/components/schemas/RecurringInterval" }
+        intervalDay: { type: integer }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date, nullable: true }
+        active: { type: boolean }
+
+    ForecastAccountProjection:
+      type: object
+      properties:
+        accountId: { type: integer }
+        accountName: { type: string }
+        currentBalance: { type: integer }
+        projection:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              balance: { type: integer }
+
+    ForecastOccurrence:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        templateId: { type: integer }
+        templateName: { type: string }
+        amountCents: { type: integer }
+        fromAccountName: { type: string }
+        toAccountName: { type: string }
+
+    ForecastResponse:
+      type: object
+      properties:
+        months: { type: integer }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/ForecastAccountProjection" }
+        upcomingOccurrences:
+          type: array
+          items: { $ref: "#/components/schemas/ForecastOccurrence" }
+
+    CategoryReportRow:
+      type: object
+      properties:
+        accountId: { type: integer }
+        accountName: { type: string }
+        accountType: { type: string, enum: [expense, income] }
+        totalCents: { type: integer }
+
+    PayeeReportRow:
+      type: object
+      properties:
+        payeeId: { type: integer }
+        payeeName: { type: string }
+        expenseTotalCents: { type: integer }
+        incomeTotalCents: { type: integer }
+
+    ImportColumnMapping:
+      type: object
+      required: [date, amount]
+      properties:
+        date: { type: integer, description: "Spaltenindex (0-basiert)" }
+        amount: { type: integer }
+        description: { type: integer }
+        payee: { type: integer }
+
+    ImportPreviewInput:
+      type: object
+      required: [csvText, mapping]
+      properties:
+        csvText: { type: string }
+        delimiter: { type: string }
+        hasHeader: { type: boolean }
+        mapping: { $ref: "#/components/schemas/ImportColumnMapping" }
+
+    ImportPreviewRow:
+      type: object
+      properties:
+        rowIndex: { type: integer }
+        date: { type: string, format: date, nullable: true }
+        rawDate: { type: string }
+        amountCents: { type: integer, nullable: true }
+        description: { type: string }
+        payeeName: { type: string, nullable: true }
+        suggestedCategoryAccountId: { type: integer, nullable: true }
+        suggestedCategoryAccountName: { type: string, nullable: true }
+        valid: { type: boolean }
+
+    ImportCommitRow:
+      type: object
+      required: [date, amountCents, categoryAccountId]
+      properties:
+        date: { type: string, format: date }
+        amountCents: { type: integer }
+        description: { type: string }
+        payeeName: { type: string, nullable: true }
+        categoryAccountId: { type: integer }
+
+    ImportCommitInput:
+      type: object
+      required: [defaultAccountId, rows]
+      properties:
+        defaultAccountId: { type: integer, description: "Konto, zu dem die importierte CSV gehört (z.B. Girokonto)" }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/ImportCommitRow" }
