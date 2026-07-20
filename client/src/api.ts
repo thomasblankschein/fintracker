@@ -128,10 +128,12 @@ export const api = {
   createPayee: (name: string) => request<{ id: number; name: string }>("/payees", { method: "POST", body: JSON.stringify({ name }) }),
   deletePayee: (id: number) => request<{ ok: true }>(`/payees/${id}`, { method: "DELETE" }),
 
-  getTransactions: (filters: { account?: number; payee?: number; from?: string; to?: string } = {}) => {
+  getTransactions: (
+    filters: { account?: number; payee?: number; from?: string; to?: string; description?: string } = {}
+  ) => {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(filters)) {
-      if (v !== undefined) params.set(k, String(v));
+      if (v !== undefined && v !== "") params.set(k, String(v));
     }
     const qs = params.toString();
     return request<Transaction[]>(`/transactions${qs ? `?${qs}` : ""}`);

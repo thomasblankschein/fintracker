@@ -56,7 +56,7 @@ function serializeTransaction(t: any, postings: any[]) {
 }
 
 transactionsRouter.get("/", (req, res) => {
-  const { account, payee, from, to } = req.query as Record<string, string | undefined>;
+  const { account, payee, from, to, description } = req.query as Record<string, string | undefined>;
 
   let txIds: number[] | null = null;
   if (account) {
@@ -78,6 +78,10 @@ transactionsRouter.get("/", (req, res) => {
   if (to) {
     sql += " AND t.date <= ?";
     params.push(to);
+  }
+  if (description) {
+    sql += " AND t.description LIKE ?";
+    params.push(`%${description}%`);
   }
   if (txIds) {
     if (txIds.length === 0) return res.json([]);

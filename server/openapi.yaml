@@ -139,16 +139,24 @@ paths:
       parameters:
         - name: account
           in: query
+          description: Nur Buchungen, die dieses Konto berühren
           schema: { type: integer }
         - name: payee
           in: query
+          description: Nur Buchungen mit diesem Zahlungsempfänger
           schema: { type: integer }
         - name: from
           in: query
+          description: Nur Buchungen ab diesem Datum (inklusiv)
           schema: { type: string, format: date }
         - name: to
           in: query
+          description: Nur Buchungen bis zu diesem Datum (inklusiv)
           schema: { type: string, format: date }
+        - name: description
+          in: query
+          description: Freitextsuche in der Buchungsbeschreibung (Teilstring, ohne Beachtung von Groß-/Kleinschreibung)
+          schema: { type: string }
       responses:
         "200":
           description: Liste der Buchungen

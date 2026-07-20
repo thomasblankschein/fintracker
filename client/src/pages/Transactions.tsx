@@ -38,12 +38,26 @@ export default function Transactions() {
 
   const filterAccount = params.get("account") ?? "";
   const filterPayee = params.get("payee") ?? "";
+  const filterFrom = params.get("from") ?? "";
+  const filterTo = params.get("to") ?? "";
+  const filterDescription = params.get("description") ?? "";
+  const hasActiveFilter = Boolean(filterAccount || filterPayee || filterFrom || filterTo || filterDescription);
+
+  const setFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setParams(next, { replace: true });
+  };
 
   const load = () => {
     api
       .getTransactions({
         account: filterAccount ? Number(filterAccount) : undefined,
         payee: filterPayee ? Number(filterPayee) : undefined,
+        from: filterFrom || undefined,
+        to: filterTo || undefined,
+        description: filterDescription || undefined,
       })
       .then(setTransactions)
       .catch((e) => setError(e.message));
@@ -51,7 +65,7 @@ export default function Transactions() {
 
   useEffect(() => {
     load();
-  }, [filterAccount, filterPayee]);
+  }, [filterAccount, filterPayee, filterFrom, filterTo, filterDescription]);
 
   useEffect(() => {
     api.getAccountsTree().then(setTree).catch((e) => setError(e.message));
@@ -59,7 +73,6 @@ export default function Transactions() {
   }, []);
 
   const flatAccounts = useMemo(() => flattenAccounts(tree), [tree]);
-  const accountName = (id: number) => flatAccounts.find((a) => a.node.id === id)?.node.name ?? "?";
 
   const resetForm = () => {
     setEditingId(null);
@@ -144,15 +157,54 @@ export default function Transactions() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      {(filterAccount || filterPayee) && (
-        <div className="card">
-          Filter aktiv: {filterAccount && <span className="pill">Konto: {accountName(Number(filterAccount))}</span>}{" "}
-          {filterPayee && <span className="pill">Zahlungsempfänger</span>}{" "}
+      <div className="card">
+        <div className="form-row">
+          <label>
+            Von
+            <input type="date" value={filterFrom} onChange={(e) => setFilter("from", e.target.value)} />
+          </label>
+          <label>
+            Bis
+            <input type="date" value={filterTo} onChange={(e) => setFilter("to", e.target.value)} />
+          </label>
+          <label>
+            Zahlungsempfänger
+            <select value={filterPayee} onChange={(e) => setFilter("payee", e.target.value)}>
+              <option value="">Alle</option>
+              {payees.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Konto
+            <select value={filterAccount} onChange={(e) => setFilter("account", e.target.value)}>
+              <option value="">Alle</option>
+              {flatAccounts.map(({ node, depth }) => (
+                <option key={node.id} value={node.id}>
+                  {"  ".repeat(depth)}
+                  {node.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Beschreibung
+            <input
+              value={filterDescription}
+              onChange={(e) => setFilter("description", e.target.value)}
+              placeholder="Suche…"
+            />
+          </label>
+        </div>
+        {hasActiveFilter && (
           <button className="secondary" onClick={() => setParams({})}>
             Filter zurücksetzen
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {showForm && (
         <form className="card" onSubmit={submit}>
