@@ -5,12 +5,13 @@ interface Props {
   value: number | "";
   onChange: (id: number) => void;
   filterType?: AccountNode["type"][];
+  excludeId?: number;
   placeholder?: string;
 }
 
-export default function AccountSelect({ tree, value, onChange, filterType, placeholder }: Props) {
-  const flat = flattenAccounts(tree).filter((entry) =>
-    filterType ? filterType.includes(entry.node.type) : true
+export default function AccountSelect({ tree, value, onChange, filterType, excludeId, placeholder }: Props) {
+  const flat = flattenAccounts(tree).filter(
+    (entry) => (filterType ? filterType.includes(entry.node.type) : true) && entry.node.id !== excludeId
   );
 
   return (

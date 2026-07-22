@@ -4,11 +4,54 @@ import { detectDelimiter, parseCsv, parseAmountToCents, parseDateToIso } from ".
 
 export const importRouter = Router();
 
+const DUPLICATE_WINDOW_DAYS = 3;
+
 interface ColumnMapping {
   date: number;
   amount: number;
   description?: number;
   payee?: number;
+}
+
+function parseIsoDate(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function shiftDate(iso: string, days: number): string {
+  const d = parseIsoDate(iso);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+interface DuplicateMatch {
+  transactionId: number;
+  date: string;
+  description: string | null;
+}
+
+/**
+ * Findet eine bereits vorhandene Buchung auf demselben Konto mit exakt gleichem
+ * (vorzeichenbehaftetem) Betrag innerhalb eines Datumsfensters. Bewusst ohne
+ * Text-Abgleich: derselbe Ausgleich Girokonto<->Kreditkarte liest sich auf beiden
+ * Kontoauszügen meist völlig unterschiedlich.
+ */
+function findDuplicate(accountId: number, amountCents: number, date: string): DuplicateMatch | null {
+  const from = shiftDate(date, -DUPLICATE_WINDOW_DAYS);
+  const to = shiftDate(date, DUPLICATE_WINDOW_DAYS);
+  const row = db
+    .prepare(
+      `SELECT t.id AS transactionId, t.date, t.description
+       FROM postings po
+       JOIN transactions t ON t.id = po.transaction_id
+       WHERE po.account_id = ? AND po.amount_cents = ? AND t.date BETWEEN ? AND ?
+       ORDER BY ABS(julianday(t.date) - julianday(?))
+       LIMIT 1`
+    )
+    .get(accountId, amountCents, from, to, date) as
+    | { transactionId: number; date: string; description: string | null }
+    | undefined;
+  return row ?? null;
 }
 
 importRouter.post("/parse", (req, res) => {
@@ -46,14 +89,18 @@ function suggestCategoryForPayee(payeeName: string | undefined): { id: number; n
 }
 
 importRouter.post("/preview", (req, res) => {
-  const { csvText, delimiter, mapping, hasHeader } = req.body as {
+  const { csvText, delimiter, mapping, hasHeader, defaultAccountId } = req.body as {
     csvText: string;
     delimiter: string;
     mapping: ColumnMapping;
     hasHeader: boolean;
+    defaultAccountId: number;
   };
   if (!csvText || !mapping || mapping.date === undefined || mapping.amount === undefined) {
     return res.status(400).json({ error: "csvText und mapping (date, amount) sind erforderlich." });
+  }
+  if (!defaultAccountId) {
+    return res.status(400).json({ error: "defaultAccountId ist erforderlich (Ziel-Konto der CSV)." });
   }
 
   const allRows = parseCsv(csvText, delimiter);
@@ -68,6 +115,7 @@ importRouter.post("/preview", (req, res) => {
     const date = parseDateToIso(rawDate);
     const amountCents = parseAmountToCents(rawAmount);
     const suggestion = suggestCategoryForPayee(payeeName || description);
+    const duplicateOf = date !== null && amountCents !== null ? findDuplicate(defaultAccountId, amountCents, date) : null;
 
     return {
       rowIndex: index,
@@ -78,6 +126,8 @@ importRouter.post("/preview", (req, res) => {
       payeeName: payeeName || null,
       suggestedCategoryAccountId: suggestion?.id ?? null,
       suggestedCategoryAccountName: suggestion?.name ?? null,
+      possibleDuplicate: duplicateOf !== null,
+      duplicateOf,
       valid: date !== null && amountCents !== null && amountCents !== 0,
     };
   });
