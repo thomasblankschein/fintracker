@@ -25,10 +25,14 @@ export default function Reports() {
       .catch((e) => setError(e.message));
   }, [from, to]);
 
-  const expenseRows = byCategory.filter((r) => r.accountType === "expense" && r.totalCents > 0);
-  const incomeRows = byCategory.filter((r) => r.accountType === "income" && r.totalCents > 0);
-  const totalExpense = expenseRows.reduce((s, r) => s + r.totalCents, 0);
-  const totalIncome = incomeRows.reduce((s, r) => s + r.totalCents, 0);
+  // Jede Zeile enthält bereits die Summe aller Unterkonten (Rollup, wie im Kontenrahmen).
+  // Für Gesamtsumme und Balkendiagramm daher nur die oberste Kategorie-Ebene verwenden —
+  // sonst würden z.B. "Freizeit & Hobby" und sein Unterkonto "Urlaube & Trips" doppelt gezählt.
+  const topExpenseRows = byCategory.filter((r) => r.accountType === "expense" && r.depth === 1 && r.totalCents > 0);
+  const topIncomeRows = byCategory.filter((r) => r.accountType === "income" && r.depth === 1 && r.totalCents > 0);
+  const totalExpense = topExpenseRows.reduce((s, r) => s + r.totalCents, 0);
+  const totalIncome = topIncomeRows.reduce((s, r) => s + r.totalCents, 0);
+  const allExpenseRows = byCategory.filter((r) => r.accountType === "expense" && r.totalCents > 0);
 
   return (
     <div>
@@ -65,22 +69,49 @@ export default function Reports() {
 
       <div className="card">
         <h2>Ausgaben nach Kategorie</h2>
-        {expenseRows.length === 0 ? (
+        {topExpenseRows.length === 0 ? (
           <p className="muted">Keine Ausgaben im Zeitraum.</p>
         ) : (
-          <ResponsiveContainer width="100%" height={Math.max(200, expenseRows.length * 40)}>
-            <BarChart data={expenseRows} layout="vertical" margin={{ left: 40 }}>
+          <ResponsiveContainer width="100%" height={Math.max(200, topExpenseRows.length * 40)}>
+            <BarChart data={topExpenseRows} layout="vertical" margin={{ left: 40 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis type="number" tickFormatter={(v) => formatCents(v as number)} />
               <YAxis type="category" dataKey="accountName" width={140} />
               <Tooltip formatter={(v: number) => formatCents(v)} />
               <Bar dataKey="totalCents">
-                {expenseRows.map((_, i) => (
+                {topExpenseRows.map((_, i) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        )}
+        <p className="muted" style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>
+          Jeder Balken enthält bereits alle Unterkategorien. Details je Ebene siehe Tabelle unten.
+        </p>
+      </div>
+
+      <div className="card">
+        <h2>Ausgaben — alle Ebenen</h2>
+        {allExpenseRows.length === 0 ? (
+          <p className="muted">Keine Ausgaben im Zeitraum.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Kategorie</th>
+                <th>Summe (inkl. Unterkonten)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allExpenseRows.map((r) => (
+                <tr key={r.accountId}>
+                  <td style={{ paddingLeft: `${(r.depth - 1) * 1.25}rem` }}>{r.accountName}</td>
+                  <td>{formatCents(r.totalCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 

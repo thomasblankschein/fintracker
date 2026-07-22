@@ -39,6 +39,31 @@ function validatePostings(postings: PostingInput[]): string | null {
   return null;
 }
 
+/** Liefert die ID des Kontos selbst plus aller (rekursiven) Unterkonten. */
+function collectSubtreeIds(rootId: number): number[] {
+  const all = db.prepare("SELECT id, parent_id FROM accounts").all() as unknown as {
+    id: number;
+    parent_id: number | null;
+  }[];
+  const byParent = new Map<number, number[]>();
+  for (const a of all) {
+    if (a.parent_id !== null) {
+      if (!byParent.has(a.parent_id)) byParent.set(a.parent_id, []);
+      byParent.get(a.parent_id)!.push(a.id);
+    }
+  }
+  const ids = [rootId];
+  const stack = [rootId];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    for (const childId of byParent.get(current) ?? []) {
+      ids.push(childId);
+      stack.push(childId);
+    }
+  }
+  return ids;
+}
+
 function serializeTransaction(t: any, postings: any[]) {
   return {
     id: t.id,
@@ -60,8 +85,13 @@ transactionsRouter.get("/", (req, res) => {
 
   let txIds: number[] | null = null;
   if (account) {
+    const accountIds = collectSubtreeIds(Number(account));
     txIds = (
-      db.prepare("SELECT DISTINCT transaction_id AS id FROM postings WHERE account_id = ?").all(Number(account)) as { id: number }[]
+      db
+        .prepare(
+          `SELECT DISTINCT transaction_id AS id FROM postings WHERE account_id IN (${accountIds.map(() => "?").join(",")})`
+        )
+        .all(...accountIds) as { id: number }[]
     ).map((r) => r.id);
   }
 

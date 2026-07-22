@@ -17,31 +17,75 @@ function dateFilter(from?: string, to?: string) {
   return { clause: clauses.length ? "AND " + clauses.join(" AND ") : "", params };
 }
 
+interface CategoryAccountRow {
+  id: number;
+  name: string;
+  type: string;
+  parent_id: number | null;
+}
+
+/**
+ * Summe pro Kategorie-Konto inkl. aller Unterkonten (rekursiv) — analog zum
+ * Saldo-Rollup im Kontenrahmen (accounts.ts buildTree), damit Auswertungen und
+ * Konten-Ansicht konsistent bleiben, egal wie tief die Kategorie-Hierarchie ist.
+ */
 reportsRouter.get("/by-category", (req, res) => {
   const { from, to } = req.query as Record<string, string | undefined>;
   const { clause, params } = dateFilter(from, to);
 
-  const rows = db
+  const ownRows = db
     .prepare(
-      `SELECT a.id AS account_id, a.name AS account_name, a.type AS account_type,
+      `SELECT a.id AS account_id,
               SUM(CASE WHEN a.type = 'expense' THEN po.amount_cents ELSE -po.amount_cents END) AS total
        FROM postings po
        JOIN accounts a ON a.id = po.account_id
        JOIN transactions t ON t.id = po.transaction_id
        WHERE a.type IN ('expense', 'income') ${clause}
-       GROUP BY a.id, a.name, a.type
-       ORDER BY total DESC`
+       GROUP BY a.id`
     )
-    .all(...params) as any[];
+    .all(...params) as { account_id: number; total: number }[];
+  const ownTotals = new Map(ownRows.map((r) => [r.account_id, r.total]));
 
-  res.json(
-    rows.map((r) => ({
-      accountId: r.account_id,
-      accountName: r.account_name,
-      accountType: r.account_type,
-      totalCents: r.total,
-    }))
-  );
+  const accounts = db
+    .prepare("SELECT id, name, type, parent_id FROM accounts WHERE type IN ('expense', 'income')")
+    .all() as unknown as CategoryAccountRow[];
+
+  const byParent = new Map<number | null, CategoryAccountRow[]>();
+  for (const a of accounts) {
+    const key = a.parent_id;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(a);
+  }
+
+  const totalsById = new Map<number, number>();
+  function computeTotal(a: CategoryAccountRow): number {
+    const own = ownTotals.get(a.id) ?? 0;
+    const total = own + (byParent.get(a.id) ?? []).reduce((sum, c) => sum + computeTotal(c), 0);
+    totalsById.set(a.id, total);
+    return total;
+  }
+  for (const root of byParent.get(null) ?? []) computeTotal(root);
+
+  const result: {
+    accountId: number;
+    accountName: string;
+    accountType: string;
+    parentId: number | null;
+    depth: number;
+    totalCents: number;
+  }[] = [];
+  function collect(a: CategoryAccountRow, depth: number) {
+    const total = totalsById.get(a.id) ?? 0;
+    // depth 0 = Wurzelknoten "Aufwendungen"/"Erträge" selbst, wird nicht einzeln ausgewiesen
+    // (die Summe steht bereits als Gesamt-Stat auf der Auswertungsseite).
+    if (depth > 0 && total !== 0) {
+      result.push({ accountId: a.id, accountName: a.name, accountType: a.type, parentId: a.parent_id, depth, totalCents: total });
+    }
+    for (const c of byParent.get(a.id) ?? []) collect(c, depth + 1);
+  }
+  for (const root of byParent.get(null) ?? []) collect(root, 0);
+
+  res.json(result);
 });
 
 reportsRouter.get("/by-payee", (req, res) => {
