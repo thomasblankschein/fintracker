@@ -14,6 +14,7 @@ import { recurringRouter } from "./routes/recurring.js";
 import { forecastRouter } from "./routes/forecast.js";
 import { reportsRouter } from "./routes/reports.js";
 import { importRouter } from "./routes/import.js";
+import { importTemplatesRouter } from "./routes/importTemplates.js";
 
 seedIfEmpty();
 
@@ -36,6 +37,7 @@ app.use("/api/recurring", recurringRouter);
 app.use("/api/forecast", forecastRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/import", importRouter);
+app.use("/api/import-templates", importTemplatesRouter);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err);

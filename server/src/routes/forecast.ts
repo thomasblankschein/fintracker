@@ -23,7 +23,7 @@ forecastRouter.get("/", (req, res) => {
 
   const templates = db
     .prepare("SELECT * FROM recurring_templates WHERE active = 1")
-    .all() as RecurringTemplateRow[];
+    .all() as unknown as RecurringTemplateRow[];
 
   const occurrences = expandOccurrences(templates, today, rangeEnd);
 

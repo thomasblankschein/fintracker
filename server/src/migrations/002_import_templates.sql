@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS import_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  delimiter TEXT NOT NULL,
+  has_header INTEGER NOT NULL DEFAULT 1,
+  mapping TEXT NOT NULL,
+  default_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL
+);
