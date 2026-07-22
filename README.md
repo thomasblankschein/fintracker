@@ -15,6 +15,8 @@ Die Daten liegen lokal in `data/finanzen.db` (SQLite). Beim ersten Start wird au
 
 Die API-Dokumentation (Swagger UI) läuft unter **http://localhost:3001/api-docs**, die rohe OpenAPI-Spezifikation unter `/api-docs.json`.
 
+**Ausführliches Anwenderhandbuch mit Screenshots:** [ANWENDERHANDBUCH.md](ANWENDERHANDBUCH.md)
+
 ## Konzept
 
 - **Konten** = Kontenrahmen (Aktiva, Passiva, Eigenkapital, Erträge, Aufwendungen), beliebig tief verschachtelbar (z. B. Aufwendungen > Freizeit & Hobby > Urlaube & Trips). Kategorien sind schlicht Konten vom Typ Erträge/Aufwendungen. Der Kontenrahmen lässt sich als JSON-Datei exportieren und (per Merge, ohne bestehende Konten zu überschreiben) wieder importieren.
