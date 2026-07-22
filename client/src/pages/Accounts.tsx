@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, AccountNode, AccountType, formatCents } from "../api";
+import { api, AccountExportNode, AccountNode, AccountType, formatCents } from "../api";
 
 const TYPE_LABELS: Record<AccountType, string> = {
   asset: "Aktiva",
@@ -16,6 +16,7 @@ export default function Accounts() {
   const [name, setName] = useState("");
   const [type, setType] = useState<AccountType>("expense");
   const [parentId, setParentId] = useState<number | "">("");
+  const [importResult, setImportResult] = useState<string | null>(null);
 
   const load = () => api.getAccountsTree().then(setTree).catch((e) => setError(e.message));
 
@@ -52,6 +53,43 @@ export default function Accounts() {
     }
   };
 
+  const exportAccounts = async () => {
+    try {
+      const data = await api.exportAccounts();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "kontenrahmen.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const importAccounts = async (file: File) => {
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error("Datei ist kein gültiges JSON.");
+      }
+      if (!Array.isArray(parsed)) {
+        throw new Error("Die Datei muss ein JSON-Array von Kontenrahmen-Knoten enthalten.");
+      }
+      const res = await api.importAccounts(parsed as AccountExportNode[]);
+      setImportResult(`${res.created} Konto(en) neu angelegt, ${res.updated} aktualisiert.`);
+      setError(null);
+      load();
+    } catch (err: any) {
+      setImportResult(null);
+      setError(err.message);
+    }
+  };
+
   const parentCandidates = (() => {
     const flat: { id: number; name: string; type: AccountType }[] = [];
     const walk = (nodes: AccountNode[]) => {
@@ -68,10 +106,36 @@ export default function Accounts() {
     <div>
       <div className="toolbar">
         <h1>Kontenrahmen</h1>
-        <button onClick={() => setShowForm((s) => !s)}>{showForm ? "Abbrechen" : "Konto anlegen"}</button>
+        <div className="actions">
+          <button className="secondary" onClick={exportAccounts}>
+            Exportieren
+          </button>
+          <label className="btn secondary" style={{ cursor: "pointer" }}>
+            Importieren
+            <input
+              type="file"
+              accept=".json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) importAccounts(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button onClick={() => setShowForm((s) => !s)}>{showForm ? "Abbrechen" : "Konto anlegen"}</button>
+        </div>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+      {importResult && (
+        <div className="card">
+          {importResult}{" "}
+          <button className="secondary" onClick={() => setImportResult(null)}>
+            OK
+          </button>
+        </div>
+      )}
 
       {showForm && (
         <form className="card" onSubmit={submit}>

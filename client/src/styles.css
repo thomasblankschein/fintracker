@@ -178,7 +178,7 @@ button, .btn {
   cursor: pointer;
 }
 
-button.secondary {
+button.secondary, .btn.secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);

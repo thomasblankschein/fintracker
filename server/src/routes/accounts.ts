@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { db } from "../db.js";
+import { db, transaction } from "../db.js";
 
 export const accountsRouter = Router();
+
+const VALID_ACCOUNT_TYPES = ["asset", "liability", "equity", "income", "expense"];
 
 interface AccountRow {
   id: number;
@@ -50,12 +52,12 @@ function buildTree(accounts: AccountRow[]) {
 }
 
 accountsRouter.get("/", (req, res) => {
-  const accounts = db.prepare("SELECT * FROM accounts ORDER BY name").all() as AccountRow[];
+  const accounts = db.prepare("SELECT * FROM accounts ORDER BY name").all() as unknown as AccountRow[];
   res.json(buildTree(accounts));
 });
 
 accountsRouter.get("/flat", (req, res) => {
-  const accounts = db.prepare("SELECT * FROM accounts WHERE is_active = 1 ORDER BY name").all() as AccountRow[];
+  const accounts = db.prepare("SELECT * FROM accounts WHERE is_active = 1 ORDER BY name").all() as unknown as AccountRow[];
   const own = ownBalances();
   res.json(
     accounts.map((a) => ({
@@ -74,8 +76,7 @@ accountsRouter.post("/", (req, res) => {
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "Name ist erforderlich." });
   }
-  const validTypes = ["asset", "liability", "equity", "income", "expense"];
-  if (!validTypes.includes(type)) {
+  if (!VALID_ACCOUNT_TYPES.includes(type)) {
     return res.status(400).json({ error: "Ungültiger Kontotyp." });
   }
   const result = db
@@ -100,6 +101,103 @@ accountsRouter.patch("/:id", (req, res) => {
     db.prepare("UPDATE accounts SET is_active = ? WHERE id = ?").run(isActive ? 1 : 0, id);
   }
   res.json({ ok: true });
+});
+
+interface AccountExportNode {
+  name: string;
+  type: string;
+  isActive: boolean;
+  children: AccountExportNode[];
+}
+
+function buildExportTree(accounts: AccountRow[]): AccountExportNode[] {
+  const byParent = new Map<number | null, AccountRow[]>();
+  for (const a of accounts) {
+    const key = a.parent_id;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(a);
+  }
+  function build(parentId: number | null): AccountExportNode[] {
+    return (byParent.get(parentId) ?? []).map((a) => ({
+      name: a.name,
+      type: a.type,
+      isActive: !!a.is_active,
+      children: build(a.id),
+    }));
+  }
+  return build(null);
+}
+
+accountsRouter.get("/export", (req, res) => {
+  const accounts = db.prepare("SELECT * FROM accounts ORDER BY name").all() as unknown as AccountRow[];
+  res.json(buildExportTree(accounts));
+});
+
+interface AccountImportNode {
+  name: string;
+  type: string;
+  isActive?: boolean;
+  children?: AccountImportNode[];
+}
+
+/**
+ * Merge statt Ersetzen: passende Knoten (gleicher Name + Typ + Elternknoten) werden
+ * wiederverwendet, sonst neu angelegt. So bleibt ein Import sicher, auch wenn Konten
+ * schon Buchungen haben (die dürfen laut Schema nicht gelöscht werden).
+ */
+accountsRouter.post("/import", (req, res) => {
+  const nodes = req.body;
+  if (!Array.isArray(nodes)) {
+    return res.status(400).json({ error: "Erwartet ein JSON-Array von Kontenrahmen-Knoten." });
+  }
+
+  let created = 0;
+  let updated = 0;
+
+  const findExisting = db.prepare(
+    "SELECT id, is_active FROM accounts WHERE name = ? AND type = ? AND parent_id IS ?"
+  );
+  const insertAccount = db.prepare(
+    "INSERT INTO accounts (name, type, parent_id, is_active) VALUES (?, ?, ?, ?)"
+  );
+  const updateActive = db.prepare("UPDATE accounts SET is_active = ? WHERE id = ?");
+
+  function upsert(node: AccountImportNode, parentId: number | null) {
+    if (!node || typeof node.name !== "string" || !node.name.trim()) {
+      throw new Error("Jeder Knoten benötigt einen Namen.");
+    }
+    if (!VALID_ACCOUNT_TYPES.includes(node.type)) {
+      throw new Error(`Ungültiger Kontotyp "${node.type}" bei "${node.name}".`);
+    }
+    const name = node.name.trim();
+    const isActive = node.isActive ?? true;
+    const existing = findExisting.get(name, node.type, parentId) as { id: number; is_active: number } | undefined;
+
+    let accountId: number;
+    if (existing) {
+      accountId = existing.id;
+      if (!!existing.is_active !== isActive) {
+        updateActive.run(isActive ? 1 : 0, accountId);
+        updated++;
+      }
+    } else {
+      accountId = Number(insertAccount.run(name, node.type, parentId, isActive ? 1 : 0).lastInsertRowid);
+      created++;
+    }
+
+    for (const child of node.children ?? []) {
+      upsert(child, accountId);
+    }
+  }
+
+  try {
+    transaction(() => {
+      for (const node of nodes) upsert(node, null);
+    });
+    res.status(201).json({ created, updated });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 accountsRouter.delete("/:id", (req, res) => {
