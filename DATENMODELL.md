@@ -1,6 +1,6 @@
 # SQLite-Datenmodell
 
-Das Datenmodell besteht aus bewusst nur **5 Tabellen** (siehe [001_init.sql](server/src/migrations/001_init.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
+Das Datenmodell besteht aus bewusst nur **6 Tabellen** (5 im Kern-Schema [001_init.sql](server/src/migrations/001_init.sql), plus `import_templates` in [002_import_templates.sql](server/src/migrations/002_import_templates.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
 
 ## ER-Diagramm
 
@@ -43,6 +43,14 @@ erDiagram
         integer active
         text last_booked_date "nullable"
     }
+    IMPORT_TEMPLATES {
+        integer id PK
+        text name "UNIQUE"
+        text delimiter
+        integer has_header "0/1"
+        text mapping "JSON: {date,amount,description?,payee?} je {index,header}"
+        integer default_account_id FK "nullable"
+    }
 
     ACCOUNTS ||--o{ ACCOUNTS       : "parent_id (Kontenrahmen-Baum)"
     ACCOUNTS ||--o{ POSTINGS       : "account_id"
@@ -51,12 +59,13 @@ erDiagram
     PAYEES ||--o{ RECURRING_TEMPLATES : "payee_id"
     ACCOUNTS ||--o{ RECURRING_TEMPLATES : "from_account_id"
     ACCOUNTS ||--o{ RECURRING_TEMPLATES : "to_account_id"
+    ACCOUNTS ||--o{ IMPORT_TEMPLATES : "default_account_id"
 ```
 
 ## Tabellen im Detail
 
 ### `accounts` — Kontenrahmen
-Selbstreferenzierender Baum (`parent_id`) für die Hierarchie Aktiva/Passiva/Eigenkapital/Erträge/Aufwendungen. Blätter unter `income`/`expense` fungieren zugleich als **Kategorien**. `is_active = 0` deaktiviert ein Konto ohne es zu löschen (Historie bleibt erhalten).
+Selbstreferenzierender Baum (`parent_id`) für die Hierarchie Aktiva/Passiva/Eigenkapital/Erträge/Aufwendungen — beliebig tief verschachtelbar (kein Tiefenlimit im Schema), z. B. Aufwendungen > Freizeit & Hobby > Urlaube & Trips > Wochenendreisen. Blätter unter `income`/`expense` fungieren zugleich als **Kategorien**; Auswertungen (`/reports/by-category`) rollen Beträge über beliebig viele Ebenen hoch. `is_active = 0` deaktiviert ein Konto ohne es zu löschen (Historie bleibt erhalten).
 
 ### `payees` — Zahlungsempfänger
 Freie, eindeutige Liste (`UNIQUE(name)`), wird bei neuer Buchung per Autocomplete wiederverwendet oder automatisch angelegt (`findOrCreatePayee`).
@@ -69,6 +78,9 @@ Herzstück der doppelten Buchhaltung: mindestens 2 Zeilen pro Transaktion, `amou
 
 ### `recurring_templates` — Wiederkehrende Zahlungen
 Vorlagen für Extrapolation (Prognose) und "Jetzt buchen". Fix auf **zwei** Konten (`from`/`to`) begrenzt — für Aufteilungen (z. B. Zins/Tilgung bei einer Hypothek) reicht das nicht, dafür muss weiterhin manuell mit Splits gebucht werden. `last_booked_date` verhindert, dass ein bereits verbuchtes Vorkommen erneut als "fällig" auftaucht.
+
+### `import_templates` — CSV-Import-Vorlagen
+Speichert Spalten-Zuordnung, Trennzeichen und Ziel-Konto für wiederkehrend gleich strukturierte CSV-Exporte (z. B. der monatliche Kreditkarten-Export derselben Bank). Das Mapping liegt als **JSON-Text** in `mapping` statt als eigene Spalten je Feld — hält die Tabelle schlank, analog zu `postings` als "flexible" Tabelle im Kernschema. Jedes gemappte Feld (`date`, `amount`, optional `description`/`payee`) trägt sowohl den Spalten-**Index** als auch den **Header-Text** zum Speicherzeitpunkt: beim Anwenden auf eine neue Datei wird zuerst per Header-Text gesucht (übersteht leicht andere Spaltenreihenfolge bei künftigen Exporten), erst bei fehlendem Treffer auf den Index zurückgefallen. `default_account_id` ist optional und wird beim Anwenden als Ziel-Konto vorausgefüllt.
 
 ## Kernentscheidung: ein Vorzeichen statt Soll/Haben
 

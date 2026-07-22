@@ -41,6 +41,13 @@ export interface FlatAccount {
   balance: number;
 }
 
+export interface AccountExportNode {
+  name: string;
+  type: AccountType;
+  isActive?: boolean;
+  children?: AccountExportNode[];
+}
+
 export interface Payee {
   id: number;
   name: string;
@@ -105,6 +112,8 @@ export interface CategoryReportRow {
   accountId: number;
   accountName: string;
   accountType: "expense" | "income";
+  parentId: number | null;
+  depth: number;
   totalCents: number;
 }
 
@@ -115,6 +124,27 @@ export interface PayeeReportRow {
   incomeTotalCents: number;
 }
 
+export interface ImportFieldMapping {
+  index: number;
+  header: string | null;
+}
+
+export interface ImportTemplateMapping {
+  date: ImportFieldMapping;
+  amount: ImportFieldMapping;
+  description?: ImportFieldMapping;
+  payee?: ImportFieldMapping;
+}
+
+export interface ImportTemplate {
+  id: number;
+  name: string;
+  delimiter: string;
+  hasHeader: boolean;
+  mapping: ImportTemplateMapping;
+  defaultAccountId: number | null;
+}
+
 export const api = {
   getAccountsTree: () => request<AccountNode[]>("/accounts"),
   getAccountsFlat: () => request<FlatAccount[]>("/accounts/flat"),
@@ -123,6 +153,9 @@ export const api = {
   updateAccount: (id: number, data: Partial<{ name: string; parentId: number | null; isActive: boolean }>) =>
     request<{ ok: true }>(`/accounts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteAccount: (id: number) => request<{ ok: true }>(`/accounts/${id}`, { method: "DELETE" }),
+  exportAccounts: () => request<AccountExportNode[]>("/accounts/export"),
+  importAccounts: (nodes: AccountExportNode[]) =>
+    request<{ created: number; updated: number }>("/accounts/import", { method: "POST", body: JSON.stringify(nodes) }),
 
   getPayees: () => request<Payee[]>("/payees"),
   createPayee: (name: string) => request<{ id: number; name: string }>("/payees", { method: "POST", body: JSON.stringify({ name }) }),
@@ -196,6 +229,7 @@ export const api = {
     delimiter: string;
     hasHeader: boolean;
     mapping: { date: number; amount: number; description?: number; payee?: number };
+    defaultAccountId: number;
   }) =>
     request<{
       rows: {
@@ -207,6 +241,8 @@ export const api = {
         payeeName: string | null;
         suggestedCategoryAccountId: number | null;
         suggestedCategoryAccountName: string | null;
+        possibleDuplicate: boolean;
+        duplicateOf: { transactionId: number; date: string; description: string | null } | null;
         valid: boolean;
       }[];
     }>("/import/preview", { method: "POST", body: JSON.stringify(data) }),
@@ -214,6 +250,16 @@ export const api = {
     defaultAccountId: number;
     rows: { date: string; amountCents: number; description: string; payeeName: string | null; categoryAccountId: number }[];
   }) => request<{ created: number }>("/import/commit", { method: "POST", body: JSON.stringify(data) }),
+
+  getImportTemplates: () => request<ImportTemplate[]>("/import-templates"),
+  createImportTemplate: (data: {
+    name: string;
+    delimiter: string;
+    hasHeader: boolean;
+    mapping: ImportTemplateMapping;
+    defaultAccountId?: number | null;
+  }) => request<{ id: number }>("/import-templates", { method: "POST", body: JSON.stringify(data) }),
+  deleteImportTemplate: (id: number) => request<{ ok: true }>(`/import-templates/${id}`, { method: "DELETE" }),
 };
 
 export function formatCents(cents: number): string {

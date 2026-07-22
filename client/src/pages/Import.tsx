@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, AccountNode, formatCents } from "../api";
+import { api, AccountNode, ImportFieldMapping, ImportTemplate, ImportTemplateMapping, flattenAccounts, formatCents } from "../api";
 import AccountSelect from "../components/AccountSelect";
 
 interface PreviewRow {
@@ -10,6 +10,8 @@ interface PreviewRow {
   description: string;
   payeeName: string | null;
   categoryAccountId: number | "";
+  possibleDuplicate: boolean;
+  duplicateOf: { transactionId: number; date: string; description: string | null } | null;
   valid: boolean;
 }
 
@@ -17,6 +19,7 @@ export default function Import() {
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<AccountNode[]>([]);
+  const [templates, setTemplates] = useState<ImportTemplate[]>([]);
 
   const [csvText, setCsvText] = useState("");
   const [delimiter, setDelimiter] = useState(",");
@@ -27,6 +30,8 @@ export default function Import() {
   const [amountCol, setAmountCol] = useState<number | "">("");
   const [descriptionCol, setDescriptionCol] = useState<number | "">("");
   const [payeeCol, setPayeeCol] = useState<number | "">("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | "">("");
+  const [templateName, setTemplateName] = useState("");
 
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [defaultAccountId, setDefaultAccountId] = useState<number | "">("");
@@ -34,6 +39,7 @@ export default function Import() {
 
   useEffect(() => {
     api.getAccountsTree().then(setTree).catch((e) => setError(e.message));
+    api.getImportTemplates().then(setTemplates).catch((e) => setError(e.message));
   }, []);
 
   const onFile = async (file: File) => {
@@ -50,20 +56,54 @@ export default function Import() {
     }
   };
 
+  const applyTemplate = (template: ImportTemplate, fileHeaders: string[]) => {
+    const resolve = (fm: ImportFieldMapping | undefined): number | "" => {
+      if (!fm) return "";
+      if (template.hasHeader && fm.header) {
+        const idx = fileHeaders.findIndex((h) => h.trim().toLowerCase() === fm.header!.trim().toLowerCase());
+        if (idx !== -1) return idx;
+      }
+      return fm.index < fileHeaders.length ? fm.index : "";
+    };
+    setDelimiter(template.delimiter);
+    setHasHeader(template.hasHeader);
+    setDateCol(resolve(template.mapping.date));
+    setAmountCol(resolve(template.mapping.amount));
+    setDescriptionCol(resolve(template.mapping.description));
+    setPayeeCol(resolve(template.mapping.payee));
+    if (template.defaultAccountId) setDefaultAccountId(template.defaultAccountId);
+  };
+
+  const onSelectTemplate = (id: number) => {
+    setSelectedTemplateId(id);
+    const template = templates.find((t) => t.id === id);
+    if (template) applyTemplate(template, headers);
+  };
+
+  const removeTemplate = async (id: number) => {
+    await api.deleteImportTemplate(id);
+    setTemplates((ts) => ts.filter((t) => t.id !== id));
+    if (selectedTemplateId === id) setSelectedTemplateId("");
+  };
+
   const goPreview = async () => {
     if (dateCol === "" || amountCol === "") {
       setError("Datum- und Betrag-Spalte sind erforderlich.");
+      return;
+    }
+    if (!defaultAccountId) {
+      setError("Bitte das Konto wählen, zu dem diese CSV gehört.");
       return;
     }
     try {
       const mapping: any = { date: dateCol, amount: amountCol };
       if (descriptionCol !== "") mapping.description = descriptionCol;
       if (payeeCol !== "") mapping.payee = payeeCol;
-      const res = await api.importPreview({ csvText, delimiter, hasHeader, mapping });
+      const res = await api.importPreview({ csvText, delimiter, hasHeader, mapping, defaultAccountId });
       setRows(
         res.rows.map((r) => ({
           ...r,
-          categoryAccountId: r.suggestedCategoryAccountId ?? "",
+          categoryAccountId: r.possibleDuplicate ? "" : r.suggestedCategoryAccountId ?? "",
         }))
       );
       setStep(3);
@@ -83,6 +123,10 @@ export default function Import() {
       return;
     }
     const validRows = rows.filter((r) => r.valid && r.categoryAccountId !== "" && r.date && r.amountCents !== null);
+    if (validRows.length === 0) {
+      setError("Keine Zeilen zum Importieren ausgewählt — allen Zeilen fehlt eine Kategorie (ggf. wurden sie als mögliches Duplikat übersprungen).");
+      return;
+    }
     try {
       const res = await api.importCommit({
         defaultAccountId: defaultAccountId as number,
@@ -101,6 +145,37 @@ export default function Import() {
     }
   };
 
+  const saveTemplate = async () => {
+    if (!templateName.trim()) {
+      setError("Bitte einen Namen für die Vorlage angeben.");
+      return;
+    }
+    const fieldMapping = (col: number | ""): ImportFieldMapping | undefined => {
+      if (col === "") return undefined;
+      return { index: col, header: hasHeader ? columnOptions[col]?.label ?? null : null };
+    };
+    const mapping: ImportTemplateMapping = {
+      date: fieldMapping(dateCol)!,
+      amount: fieldMapping(amountCol)!,
+      description: fieldMapping(descriptionCol),
+      payee: fieldMapping(payeeCol),
+    };
+    try {
+      await api.createImportTemplate({
+        name: templateName.trim(),
+        delimiter,
+        hasHeader,
+        mapping,
+        defaultAccountId: defaultAccountId || null,
+      });
+      setTemplateName("");
+      setTemplates(await api.getImportTemplates());
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
   const reset = () => {
     setStep(1);
     setCsvText("");
@@ -112,9 +187,14 @@ export default function Import() {
     setDescriptionCol("");
     setPayeeCol("");
     setDefaultAccountId("");
+    setSelectedTemplateId("");
+    setTemplateName("");
   };
 
   const columnOptions = headers.map((h, i) => ({ index: i, label: hasHeader ? h : `Spalte ${i + 1}` }));
+  const flatAccounts = flattenAccounts(tree);
+  const accountName = (id: number) => flatAccounts.find((a) => a.node.id === id)?.node.name ?? "?";
+  const validRowCount = rows.filter((r) => r.valid && r.categoryAccountId !== "").length;
 
   return (
     <div>
@@ -137,7 +217,52 @@ export default function Import() {
 
       {step === 2 && (
         <div className="card">
-          <h2>2. Spalten zuordnen</h2>
+          <h2>2. Konto & Spalten zuordnen</h2>
+
+          <div className="form-row">
+            <label>
+              Ziel-Konto (zu dem diese CSV gehört)
+              <AccountSelect tree={tree} value={defaultAccountId} onChange={setDefaultAccountId} filterType={["asset", "liability"]} />
+            </label>
+          </div>
+
+          {templates.length > 0 && (
+            <div className="form-row">
+              <label>
+                Vorlage anwenden
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => onSelectTemplate(Number(e.target.value))}
+                >
+                  <option value="" disabled>
+                    wählen…
+                  </option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "end", paddingBottom: "0.2rem" }}>
+                {templates.map((t) => (
+                  <span key={t.id} className="pill" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                    {t.name}
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => removeTemplate(t.id)}
+                      style={{ padding: "0 0.35rem", fontSize: "0.7rem", lineHeight: 1.4 }}
+                      title="Vorlage löschen"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="form-row">
             <label>
               <input type="checkbox" checked={hasHeader} onChange={(e) => setHasHeader(e.target.checked)} />
@@ -194,6 +319,21 @@ export default function Import() {
               </select>
             </label>
           </div>
+
+          <div className="form-row">
+            <label>
+              Als Vorlage speichern
+              <input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="z. B. Sparkasse Girokonto"
+              />
+            </label>
+            <button type="button" className="secondary" style={{ alignSelf: "end" }} onClick={saveTemplate}>
+              Vorlage speichern
+            </button>
+          </div>
+
           <div className="actions">
             <button className="secondary" onClick={reset}>
               Zurück
@@ -206,11 +346,10 @@ export default function Import() {
       {step === 3 && (
         <div>
           <div className="card">
-            <h2>3. Konto & Kategorien</h2>
-            <label>
-              Ziel-Konto (zu dem diese CSV gehört)
-              <AccountSelect tree={tree} value={defaultAccountId} onChange={setDefaultAccountId} filterType={["asset", "liability"]} />
-            </label>
+            <h2>3. Kategorien prüfen</h2>
+            <p className="muted">
+              Ziel-Konto: <strong>{defaultAccountId ? accountName(defaultAccountId) : "—"}</strong>
+            </p>
           </div>
           <div className="card import-table">
             <table>
@@ -220,12 +359,19 @@ export default function Import() {
                   <th>Betrag</th>
                   <th>Beschreibung</th>
                   <th>Zahlungsempfänger</th>
-                  <th>Kategorie</th>
+                  <th>Kategorie / Gegenkonto</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.rowIndex} style={{ opacity: r.valid ? 1 : 0.4 }}>
+                  <tr
+                    key={r.rowIndex}
+                    style={{
+                      opacity: r.valid ? 1 : 0.4,
+                      background: r.possibleDuplicate ? "rgba(220,38,38,0.07)" : undefined,
+                    }}
+                  >
                     <td>{r.date ?? `ungültig: ${r.rawDate}`}</td>
                     <td>{r.amountCents !== null ? formatCents(r.amountCents) : "ungültig"}</td>
                     <td>{r.description}</td>
@@ -235,8 +381,18 @@ export default function Import() {
                         tree={tree}
                         value={r.categoryAccountId}
                         onChange={(id) => updateRowCategory(r.rowIndex, id)}
-                        filterType={["expense", "income"]}
+                        excludeId={defaultAccountId || undefined}
                       />
+                    </td>
+                    <td>
+                      {r.possibleDuplicate && r.duplicateOf && (
+                        <span
+                          className="balance-warning"
+                          title={`Vermutlich bereits vorhanden: ${r.duplicateOf.date}${r.duplicateOf.description ? " – " + r.duplicateOf.description : ""}`}
+                        >
+                          ⚠ evtl. Duplikat
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -247,7 +403,9 @@ export default function Import() {
             <button className="secondary" onClick={reset}>
               Abbrechen
             </button>
-            <button onClick={commit}>{rows.length} Buchungen importieren</button>
+            <button onClick={commit} disabled={validRowCount === 0}>
+              {validRowCount} Buchungen importieren
+            </button>
           </div>
           {result !== null && <p>{result} Buchungen wurden importiert. <button className="secondary" onClick={reset}>Neuer Import</button></p>}
         </div>

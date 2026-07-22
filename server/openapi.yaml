@@ -16,6 +16,7 @@ tags:
   - name: Forecast
   - name: Reports
   - name: Import
+  - name: ImportTemplates
 
 paths:
   /accounts:
@@ -58,6 +59,42 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/FlatAccount" }
+
+  /accounts/export:
+    get:
+      tags: [Accounts]
+      summary: Kontenrahmen als portable JSON-Baumstruktur exportieren (ohne IDs/Salden)
+      responses:
+        "200":
+          description: Exportierter Kontenrahmen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AccountExportNode" }
+
+  /accounts/import:
+    post:
+      tags: [Accounts]
+      summary: Kontenrahmen aus JSON-Baumstruktur importieren (Merge, nicht Ersetzen)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/AccountExportNode" }
+      responses:
+        "201":
+          description: Import abgeschlossen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer, description: "Neu angelegte Konten" }
+                  updated: { type: integer, description: "Bestehende Konten, deren isActive geändert wurde" }
+        "400": { $ref: "#/components/responses/BadRequest" }
 
   /accounts/{id}:
     parameters:
@@ -139,7 +176,7 @@ paths:
       parameters:
         - name: account
           in: query
-          description: Nur Buchungen, die dieses Konto berühren
+          description: Nur Buchungen, die dieses Konto oder eines seiner Unterkonten (rekursiv) berühren
           schema: { type: integer }
         - name: payee
           in: query
@@ -301,7 +338,7 @@ paths:
   /reports/by-category:
     get:
       tags: [Reports]
-      summary: Auswertung nach Kategorie (Erträge/Aufwendungen-Konten)
+      summary: Auswertung nach Kategorie (Erträge/Aufwendungen-Konten), inkl. Unterkonten-Rollup
       parameters:
         - $ref: "#/components/parameters/FromParam"
         - $ref: "#/components/parameters/ToParam"
@@ -401,6 +438,43 @@ paths:
                   created: { type: integer }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  /import-templates:
+    get:
+      tags: [ImportTemplates]
+      summary: Gespeicherte Import-Vorlagen auflisten
+      responses:
+        "200":
+          description: Liste der Vorlagen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportTemplate" }
+    post:
+      tags: [ImportTemplates]
+      summary: Aktuelles Spalten-Mapping als Vorlage speichern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportTemplateInput" }
+      responses:
+        "201":
+          description: Angelegt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /import-templates/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    delete:
+      tags: [ImportTemplates]
+      summary: Vorlage löschen
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+
 components:
   parameters:
     IdParam:
@@ -465,6 +539,21 @@ components:
         children:
           type: array
           items: { $ref: "#/components/schemas/AccountNode" }
+
+    AccountExportNode:
+      type: object
+      required: [name, type]
+      description: >
+        Portable Baumdarstellung eines Kontos ohne IDs/Salden — für Export/Import.
+        Matching beim Import erfolgt über (name, type, Elternknoten): passender Knoten
+        wird wiederverwendet (nur isActive wird ggf. aktualisiert), sonst neu angelegt.
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/AccountType" }
+        isActive: { type: boolean, default: true }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/AccountExportNode" }
 
     FlatAccount:
       type: object
@@ -617,11 +706,19 @@ components:
 
     CategoryReportRow:
       type: object
+      description: >
+        Eine Zeile je Kategorie-Konto mit direkten Buchungen oder Buchungen auf einem
+        Unterkonto. totalCents ist ein Rollup (eigene Buchungen + alle Unterkonten,
+        rekursiv), analog zum Saldo-Rollup im Kontenrahmen — Zeilen verschiedener Tiefe
+        dürfen deshalb nicht einfach aufsummiert werden (Doppelzählung). Für eine
+        überschneidungsfreie Gesamtsumme nur depth=1 verwenden.
       properties:
         accountId: { type: integer }
         accountName: { type: string }
         accountType: { type: string, enum: [expense, income] }
-        totalCents: { type: integer }
+        parentId: { type: integer, nullable: true }
+        depth: { type: integer, description: "1 = oberste Kategorie-Ebene direkt unter Aufwendungen/Erträge, 2 = deren Unterkonten, usw." }
+        totalCents: { type: integer, description: "Rollup: eigene Buchungen + alle Unterkonten" }
 
     PayeeReportRow:
       type: object
@@ -642,12 +739,20 @@ components:
 
     ImportPreviewInput:
       type: object
-      required: [csvText, mapping]
+      required: [csvText, mapping, defaultAccountId]
       properties:
         csvText: { type: string }
         delimiter: { type: string }
         hasHeader: { type: boolean }
         mapping: { $ref: "#/components/schemas/ImportColumnMapping" }
+        defaultAccountId: { type: integer, description: "Ziel-Konto der CSV — wird auch für den Doubletten-Abgleich benötigt" }
+
+    ImportDuplicateMatch:
+      type: object
+      properties:
+        transactionId: { type: integer }
+        date: { type: string, format: date }
+        description: { type: string, nullable: true }
 
     ImportPreviewRow:
       type: object
@@ -660,6 +765,10 @@ components:
         payeeName: { type: string, nullable: true }
         suggestedCategoryAccountId: { type: integer, nullable: true }
         suggestedCategoryAccountName: { type: string, nullable: true }
+        possibleDuplicate: { type: boolean, description: "true, wenn auf dem Ziel-Konto bereits eine Buchung mit exakt gleichem Betrag innerhalb von ±3 Tagen existiert" }
+        duplicateOf:
+          allOf: [{ $ref: "#/components/schemas/ImportDuplicateMatch" }]
+          nullable: true
         valid: { type: boolean }
 
     ImportCommitRow:
@@ -680,3 +789,39 @@ components:
         rows:
           type: array
           items: { $ref: "#/components/schemas/ImportCommitRow" }
+
+    ImportFieldMapping:
+      type: object
+      required: [index]
+      properties:
+        index: { type: integer, description: "Spaltenindex (0-basiert) zum Zeitpunkt des Speicherns" }
+        header: { type: string, nullable: true, description: "Header-Text der Spalte, falls vorhanden — wird beim Anwenden bevorzugt für den Abgleich genutzt" }
+
+    ImportTemplateMapping:
+      type: object
+      required: [date, amount]
+      properties:
+        date: { $ref: "#/components/schemas/ImportFieldMapping" }
+        amount: { $ref: "#/components/schemas/ImportFieldMapping" }
+        description: { $ref: "#/components/schemas/ImportFieldMapping" }
+        payee: { $ref: "#/components/schemas/ImportFieldMapping" }
+
+    ImportTemplate:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        delimiter: { type: string }
+        hasHeader: { type: boolean }
+        mapping: { $ref: "#/components/schemas/ImportTemplateMapping" }
+        defaultAccountId: { type: integer, nullable: true }
+
+    ImportTemplateInput:
+      type: object
+      required: [name, delimiter, mapping]
+      properties:
+        name: { type: string }
+        delimiter: { type: string }
+        hasHeader: { type: boolean }
+        mapping: { $ref: "#/components/schemas/ImportTemplateMapping" }
+        defaultAccountId: { type: integer, nullable: true }
