@@ -161,6 +161,16 @@ npx tsc --noEmit -p server/tsconfig.json
 npx tsc --noEmit -p client/tsconfig.json
 ```
 
+## Production deployment (Docker)
+
+Target environment: the owner's private Proxmox cluster, in an unprivileged LXC container with Docker nested inside (Proxmox "Nesting" feature enabled), not a VM — chosen for lower overhead and because Proxmox's own backup/snapshot tooling (`vzdump`) then covers the whole app including the SQLite file for free. `docker compose up -d --build` is the whole deployment. Decision log (don't redo this analysis unprompted if asked to touch deployment again):
+
+- **PostgreSQL was considered and rejected** for this app — single-file SQLite fits a low-concurrency personal/family tool, avoids a second container, and Proxmox backup already covers it. Revisit only if a genuinely concurrent multi-instance or ephemeral-filesystem (serverless/PaaS) target comes up.
+- **Auth/roles were discussed but explicitly deferred** ("just an idea for now, leave the app as is") — Owner/Editor/Viewer roles, session-based auth via `express-session`, password hashing via `node:crypto`'s `scrypt` (not `bcrypt`, to avoid reintroducing a native-binding dependency on a machine that already can't build one). Not implemented. Don't build this unprompted; the deployment work above shipped without it deliberately, on the assumption the app stays on a private/trusted network for now.
+- **One container, not two.** `server/src/index.ts` conditionally serves the built client (`express.static` + a `"*"` catch-all returning `index.html`, guarded by `fs.existsSync(clientDist)` so dev mode — where `client/dist` doesn't exist and Vite's own dev server handles the client — is unaffected). This means client and API share an origin in production; no CORS/proxy config needed there.
+- **`tsc` doesn't copy non-TS files.** `server/scripts/copy-migrations.js` runs as an npm `postbuild` hook and copies `src/migrations/*.sql` → `dist/migrations` — without it the production server 500s on boot (`ENOENT` looking for migrations next to the compiled `dist/index.js`). `server/openapi.yaml` needs no such step; it already lives outside `src/`, so its `path.resolve(__dirname, "../openapi.yaml")` resolution is correct unchanged in both dev and the compiled `dist/` layout.
+- **Docker was not actually run/tested here** — this dev machine has no Docker installed. What *was* verified: built server + built client run correctly together via plain `node server/dist/index.js` (migrations, static serving, SPA fallback routing, API all confirmed working), and separately, the exact file layout the `Dockerfile`'s `COPY` lines produce was reproduced by hand in a scratch directory and booted successfully from there (including the `data/` relative path that `docker-compose.yml`'s volume mount targets). Still run `docker compose up -d --build` for real before trusting this in production — if it fails, it's most likely a `COPY` path or `npm ci` workspace-hoisting detail, not the application logic itself.
+
 ## Structure
 
 ```

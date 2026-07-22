@@ -39,6 +39,17 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/import", importRouter);
 app.use("/api/import-templates", importTemplatesRouter);
 
+// Im Produktions-Build (Docker) liefert derselbe Server auch das gebaute Frontend aus,
+// damit ein einzelner Container/Port reicht. Im Dev-Modus existiert client/dist nicht —
+// dort übernimmt der Vite-Dev-Server (mit Proxy auf /api) die Auslieferung.
+const clientDist = path.resolve(__dirname, "../../client/dist");
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
+
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err);
   res.status(500).json({ error: err.message ?? "Interner Fehler" });

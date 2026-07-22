@@ -1,0 +1,14 @@
+node_modules
+server/node_modules
+client/node_modules
+server/dist
+client/dist
+data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+*.tsbuildinfo
+.git
+docs/screenshots
