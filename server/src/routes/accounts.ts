@@ -92,7 +92,10 @@ accountsRouter.patch("/:id", (req, res) => {
   if (!existing) return res.status(404).json({ error: "Konto nicht gefunden." });
 
   if (name !== undefined) {
-    db.prepare("UPDATE accounts SET name = ? WHERE id = ?").run(name, id);
+    if (typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Name darf nicht leer sein." });
+    }
+    db.prepare("UPDATE accounts SET name = ? WHERE id = ?").run(name.trim(), id);
   }
   if (parentId !== undefined) {
     db.prepare("UPDATE accounts SET parent_id = ? WHERE id = ?").run(parentId, id);

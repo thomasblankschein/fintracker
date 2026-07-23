@@ -44,6 +44,15 @@ export default function Accounts() {
     load();
   };
 
+  const rename = async (node: AccountNode, newName: string) => {
+    try {
+      await api.updateAccount(node.id, { name: newName });
+      load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const remove = async (node: AccountNode) => {
     try {
       await api.deleteAccount(node.id);
@@ -183,7 +192,14 @@ export default function Accounts() {
             <p className="muted">Keine Konten.</p>
           ) : (
             rootsOfType(typeKey as AccountType).map((node) => (
-              <AccountRow key={node.id} node={node} depth={0} onToggle={toggleActive} onDelete={remove} />
+              <AccountRow
+                key={node.id}
+                node={node}
+                depth={0}
+                onToggle={toggleActive}
+                onDelete={remove}
+                onRename={rename}
+              />
             ))
           )}
         </div>
@@ -197,21 +213,55 @@ function AccountRow({
   depth,
   onToggle,
   onDelete,
+  onRename,
 }: {
   node: AccountNode;
   depth: number;
   onToggle: (n: AccountNode) => void;
   onDelete: (n: AccountNode) => void;
+  onRename: (n: AccountNode, newName: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(node.name);
+
+  const startEdit = () => {
+    setDraft(node.name);
+    setEditing(true);
+  };
+
+  const save = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== node.name) {
+      onRename(node, trimmed);
+    }
+    setEditing(false);
+  };
+
   return (
     <div className="tree-node">
       <div className="row" style={{ paddingLeft: `${depth * 1.25}rem` }}>
-        <span style={{ opacity: node.isActive ? 1 : 0.5 }}>
-          {node.name}
-          {!node.isActive && <span className="pill" style={{ marginLeft: 8 }}>inaktiv</span>}
-        </span>
+        {editing ? (
+          <input
+            value={draft}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={save}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+              if (e.key === "Escape") setEditing(false);
+            }}
+          />
+        ) : (
+          <span style={{ opacity: node.isActive ? 1 : 0.5 }}>
+            {node.name}
+            {!node.isActive && <span className="pill" style={{ marginLeft: 8 }}>inaktiv</span>}
+          </span>
+        )}
         <div className="actions">
           <span className="muted">{formatCents(node.balance)}</span>
+          <button className="secondary" onClick={startEdit}>
+            Umbenennen
+          </button>
           <button className="secondary" onClick={() => onToggle(node)}>
             {node.isActive ? "Deaktivieren" : "Aktivieren"}
           </button>
@@ -221,7 +271,7 @@ function AccountRow({
         </div>
       </div>
       {node.children.map((child) => (
-        <AccountRow key={child.id} node={child} depth={depth + 1} onToggle={onToggle} onDelete={onDelete} />
+        <AccountRow key={child.id} node={child} depth={depth + 1} onToggle={onToggle} onDelete={onDelete} onRename={onRename} />
       ))}
     </div>
   );
