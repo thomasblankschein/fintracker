@@ -146,6 +146,8 @@ export interface ImportTemplate {
 }
 
 export const api = {
+  getInfo: () => request<{ version: string }>("/info"),
+
   getAccountsTree: () => request<AccountNode[]>("/accounts"),
   getAccountsFlat: () => request<FlatAccount[]>("/accounts/flat"),
   createAccount: (data: { name: string; type: AccountType; parentId?: number | null }) =>

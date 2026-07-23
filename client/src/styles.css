@@ -51,6 +51,8 @@ body {
   position: sticky;
   top: 0;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
@@ -83,6 +85,13 @@ body {
   border-left-color: var(--accent);
   background: var(--accent-soft);
   font-weight: 600;
+}
+
+.sidebar-version {
+  margin-top: auto;
+  padding: 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .content {
@@ -273,6 +282,64 @@ label {
 .actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+}
+
+.menu {
+  position: relative;
+}
+
+.icon-button {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 0.15rem 0.5rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  border-radius: 6px;
+}
+
+.icon-button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.25rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 140px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem;
+}
+
+.menu-dropdown button {
+  background: transparent;
+  color: var(--text);
+  border: none;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.menu-dropdown button:hover {
+  background: var(--accent-soft);
+}
+
+.menu-dropdown button.danger {
+  color: var(--danger);
+}
+
+.menu-dropdown button.danger:hover {
+  background: rgba(220, 38, 38, 0.12);
 }
 
 .toolbar {

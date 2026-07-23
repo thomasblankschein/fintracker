@@ -15,6 +15,7 @@ import { forecastRouter } from "./routes/forecast.js";
 import { reportsRouter } from "./routes/reports.js";
 import { importRouter } from "./routes/import.js";
 import { importTemplatesRouter } from "./routes/importTemplates.js";
+import { infoRouter } from "./routes/info.js";
 
 seedIfEmpty();
 
@@ -38,6 +39,7 @@ app.use("/api/forecast", forecastRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/import", importRouter);
 app.use("/api/import-templates", importTemplatesRouter);
+app.use("/api/info", infoRouter);
 
 // Im Produktions-Build (Docker) liefert derselbe Server auch das gebaute Frontend aus,
 // damit ein einzelner Container/Port reicht. Im Dev-Modus existiert client/dist nicht —

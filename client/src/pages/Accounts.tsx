@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { api, AccountExportNode, AccountNode, AccountType, formatCents } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { api, AccountExportNode, AccountNode, AccountType, flattenAccounts, formatCents } from "../api";
 
 const TYPE_LABELS: Record<AccountType, string> = {
   asset: "Aktiva",
@@ -99,17 +99,7 @@ export default function Accounts() {
     }
   };
 
-  const parentCandidates = (() => {
-    const flat: { id: number; name: string; type: AccountType }[] = [];
-    const walk = (nodes: AccountNode[]) => {
-      for (const n of nodes) {
-        flat.push({ id: n.id, name: n.name, type: n.type });
-        walk(n.children);
-      }
-    };
-    walk(tree);
-    return flat.filter((n) => n.type === type);
-  })();
+  const parentCandidates = flattenAccounts(tree).filter((entry) => entry.node.type === type);
 
   return (
     <div>
@@ -173,9 +163,10 @@ export default function Accounts() {
               Übergeordnetes Konto (optional)
               <select value={parentId} onChange={(e) => setParentId(e.target.value ? Number(e.target.value) : "")}>
                 <option value="">— kein —</option>
-                {parentCandidates.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
+                {parentCandidates.map(({ node, depth }) => (
+                  <option key={node.id} value={node.id}>
+                    {"  ".repeat(depth)}
+                    {node.name}
                   </option>
                 ))}
               </select>
@@ -259,20 +250,67 @@ function AccountRow({
         )}
         <div className="actions">
           <span className="muted">{formatCents(node.balance)}</span>
-          <button className="secondary" onClick={startEdit}>
-            Umbenennen
-          </button>
-          <button className="secondary" onClick={() => onToggle(node)}>
-            {node.isActive ? "Deaktivieren" : "Aktivieren"}
-          </button>
-          <button className="danger" onClick={() => onDelete(node)}>
-            Löschen
-          </button>
+          <AccountMenu
+            isActive={node.isActive}
+            onRename={startEdit}
+            onToggle={() => onToggle(node)}
+            onDelete={() => onDelete(node)}
+          />
         </div>
       </div>
       {node.children.map((child) => (
         <AccountRow key={child.id} node={child} depth={depth + 1} onToggle={onToggle} onDelete={onDelete} onRename={onRename} />
       ))}
+    </div>
+  );
+}
+
+function AccountMenu({
+  isActive,
+  onRename,
+  onToggle,
+  onDelete,
+}: {
+  isActive: boolean;
+  onRename: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const run = (fn: () => void) => {
+    setOpen(false);
+    fn();
+  };
+
+  return (
+    <div className="menu" ref={ref}>
+      <button type="button" className="icon-button" onClick={() => setOpen((o) => !o)} aria-label="Aktionen">
+        ⋯
+      </button>
+      {open && (
+        <div className="menu-dropdown">
+          <button type="button" onClick={() => run(onRename)}>
+            Umbenennen
+          </button>
+          <button type="button" onClick={() => run(onToggle)}>
+            {isActive ? "Deaktivieren" : "Aktivieren"}
+          </button>
+          <button type="button" className="danger" onClick={() => run(onDelete)}>
+            Löschen
+          </button>
+        </div>
+      )}
     </div>
   );
 }

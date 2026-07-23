@@ -4,11 +4,12 @@ info:
   description: >
     Private Finanzverwaltung mit doppelter Buchhaltung, Kontenrahmen, Zahlungsempfängern,
     wiederkehrenden Zahlungen, Prognosen und CSV-Import.
-  version: "1.0.0"
+  version: "0.11.0"
 servers:
   - url: /api
 
 tags:
+  - name: Info
   - name: Accounts
   - name: Payees
   - name: Transactions
@@ -19,6 +20,20 @@ tags:
   - name: ImportTemplates
 
 paths:
+  /info:
+    get:
+      tags: [Info]
+      summary: App-Version (aus package.json zur Laufzeit gelesen)
+      responses:
+        "200":
+          description: Versionsinfo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string, example: "0.11.0" }
+
   /accounts:
     get:
       tags: [Accounts]

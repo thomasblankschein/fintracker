@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Accounts from "./pages/Accounts";
@@ -6,6 +7,7 @@ import Payees from "./pages/Payees";
 import Recurring from "./pages/Recurring";
 import Import from "./pages/Import";
 import Reports from "./pages/Reports";
+import { api } from "./api";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
@@ -18,6 +20,12 @@ const navItems = [
 ];
 
 export default function App() {
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getInfo().then((info) => setVersion(info.version)).catch(() => {});
+  }, []);
+
   return (
     <div className="app-shell">
       <nav className="sidebar">
@@ -31,6 +39,7 @@ export default function App() {
             </li>
           ))}
         </ul>
+        {version && <div className="sidebar-version">Version {version}</div>}
       </nav>
       <main className="content">
         <Routes>
