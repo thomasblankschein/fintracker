@@ -174,9 +174,9 @@ Target environment: the owner's private Proxmox cluster, in an unprivileged LXC 
 ## Structure
 
 ```
-server/src/routes/*.ts      one file per resource (accounts, payees, transactions, recurring, forecast, reports, import, importTemplates)
+server/src/routes/*.ts      one file per resource (accounts, payees, transactions, recurring, forecast, reports, import, importTemplates, info)
 server/src/services/        forecast.ts (recurring→occurrence expansion), importParser.ts (CSV/date/amount parsing)
 server/src/migrations/      plain numbered .sql files, applied in order by db.ts on boot
 client/src/api.ts           typed fetch wrapper — the single source of truth for API shapes on the frontend
-client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1
+client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1 (info is the exception — no page, just the version string in the sidebar footer)
 ```

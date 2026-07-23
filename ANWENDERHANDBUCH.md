@@ -74,6 +74,7 @@ Die Navigation links führt zu allen sieben Bereichen der App. Sie ist auf jeder
 ① **Kontenbaum** — beliebig tief verschachtelbar; jedes Konto zeigt seinen Saldo *inklusive* aller Unterkonten (hier sichtbar an der dreistufigen Kette Freizeit & Hobby → Urlaube & Trips → Wochenendreisen).
 ② **Konto anlegen** — neues Konto oder neue Kategorie hinzufügen.
 ③ **Exportieren/Importieren** — den kompletten Kontenrahmen als JSON-Datei sichern oder (per Merge, ohne bestehende Konten zu überschreiben) wieder einspielen.
+④ **"⋯"-Menü** — pro Konto: Umbenennen (Inline-Bearbeitung direkt in der Zeile), Deaktivieren/Aktivieren, Löschen (nur möglich, wenn das Konto weder Buchungen noch Unterkonten hat — sonst stattdessen deaktivieren).
 
 ### 3.3 Buchungen
 
