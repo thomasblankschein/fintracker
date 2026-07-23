@@ -21,6 +21,7 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/openapi.yaml ./server/openapi.yaml
+COPY --from=build /app/server/package.json ./server/package.json
 COPY --from=build /app/client/dist ./client/dist
 
 EXPOSE 3001
