@@ -4,7 +4,7 @@ info:
   description: >
     Private Finanzverwaltung mit doppelter Buchhaltung, Kontenrahmen, Zahlungsempfängern,
     wiederkehrenden Zahlungen, Prognosen und CSV-Import.
-  version: "0.11.0"
+  version: "0.11.1"
 servers:
   - url: /api
 
@@ -32,7 +32,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  version: { type: string, example: "0.11.0" }
+                  version: { type: string, example: "0.11.1" }
 
   /accounts:
     get:
