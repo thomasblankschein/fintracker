@@ -6,7 +6,7 @@ Praxisorientierte Anleitung für alle, die direkt gegen die Finanzen-API spreche
 - **Auth:** keine — lokales Single-User-Tool
 - **Format:** JSON (`Content-Type: application/json`), Fehler immer als `{"error": "Lesbare Meldung"}` mit Status 400/404/500
 - **Geld:** immer Integer-**Cent** (nie Float), z. B. 12,50 € = `1250`
-- **Version:** `GET /api/info` → `{"version": "0.11.1"}`, zur Laufzeit aus `server/package.json` gelesen
+- **Version:** `GET /api/info` → `{"version": "0.12.0"}`, zur Laufzeit aus `server/package.json` gelesen
 
 ## 1. Das Grundprinzip verstehen, bevor du buchst
 
