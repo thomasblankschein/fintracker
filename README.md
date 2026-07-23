@@ -85,18 +85,11 @@ docker compose version
 
 **7. Repository klonen**
 
-Das Repository ist **privat** — für den Zugriff per SSH-Deploy-Key (read-only, an dieses eine Repo gebunden):
-
-```bash
-ssh-keygen -t ed25519 -C "fintracker-lxc" -f ~/.ssh/id_ed25519 -N ""
-cat ~/.ssh/id_ed25519.pub
-```
-
-Den ausgegebenen öffentlichen Schlüssel auf GitHub unter *Repository → Settings → Deploy keys → Add deploy key* eintragen (Schreibzugriff **nicht** nötig). Danach:
+Das Repository ist öffentlich, kein SSH-Key oder Token nötig:
 
 ```bash
 cd /opt
-git clone git@github.com:thomasblankschein/fintracker.git
+git clone https://github.com/thomasblankschein/fintracker.git
 cd fintracker
 ```
 
@@ -137,7 +130,7 @@ docker compose up -d --build
 **Troubleshooting:**
 - *Docker-Befehle scheitern mit einem cgroup-/Namespace-Fehler* → Nesting-Feature (Schritt 3) prüfen, Container danach neu starten.
 - *App von anderen Geräten im Netz nicht erreichbar* → Proxmox-Firewall-Regeln für den Container sowie die Bridge-Zuordnung prüfen.
-- *`git clone` scheitert mit "Permission denied" oder "Repository not found"* → Deploy-Key-Eintrag auf GitHub und den lokalen SSH-Key (Schritt 7) gegenprüfen.
+- *`git clone` scheitert mit "Permission denied" oder "Repository not found"* → URL (Schritt 7) und Internetzugang des Containers prüfen.
 
 ## Konzept
 
