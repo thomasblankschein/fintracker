@@ -21,6 +21,7 @@ function serialize(row: any) {
     name: row.name,
     delimiter: row.delimiter,
     hasHeader: !!row.has_header,
+    skipRows: row.skip_rows ?? 0,
     mapping: JSON.parse(row.mapping) as TemplateMapping,
     defaultAccountId: row.default_account_id,
   };
@@ -32,7 +33,7 @@ importTemplatesRouter.get("/", (req, res) => {
 });
 
 importTemplatesRouter.post("/", (req, res) => {
-  const { name, delimiter, hasHeader, mapping, defaultAccountId } = req.body ?? {};
+  const { name, delimiter, hasHeader, mapping, defaultAccountId, skipRows } = req.body ?? {};
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "Name ist erforderlich." });
   }
@@ -42,9 +43,9 @@ importTemplatesRouter.post("/", (req, res) => {
   try {
     const result = db
       .prepare(
-        "INSERT INTO import_templates (name, delimiter, has_header, mapping, default_account_id) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO import_templates (name, delimiter, has_header, skip_rows, mapping, default_account_id) VALUES (?, ?, ?, ?, ?, ?)"
       )
-      .run(name.trim(), delimiter, hasHeader ? 1 : 0, JSON.stringify(mapping), defaultAccountId ?? null);
+      .run(name.trim(), delimiter, hasHeader ? 1 : 0, Number(skipRows) || 0, JSON.stringify(mapping), defaultAccountId ?? null);
     res.status(201).json({ id: result.lastInsertRowid });
   } catch (e: any) {
     if (String(e.message).includes("UNIQUE")) {

@@ -172,13 +172,17 @@ Anders als bei den rohen `postings` sind die Vorzeichen hier bereits **nutzerfre
 
 Dreistufiger Ablauf, gedacht für Bank-/Kreditkarten-Exporte:
 
-1. **`POST /import/parse`** `{csvText}` → erkennt Trennzeichen automatisch, liefert `headers` + `sampleRows` zur Anzeige.
-2. **`POST /import/preview`** `{csvText, delimiter, hasHeader, mapping: {date, amount, description?, payee?}, defaultAccountId}` (Spaltenindizes, 0-basiert) → geparste Zeilen inkl. `suggestedCategoryAccountId` (Vorschlag anhand bisheriger Buchungen desselben Zahlungsempfängers) und Doubletten-Hinweis (siehe unten).
+1. **`POST /import/parse`** `{csvText, skipRows?}` → erkennt Trennzeichen automatisch, liefert `headers` + `sampleRows` zur Anzeige.
+2. **`POST /import/preview`** `{csvText, delimiter, hasHeader, skipRows?, mapping: {date, amount, description?, payee?}, defaultAccountId}` (Spaltenindizes, 0-basiert) → geparste Zeilen inkl. `suggestedCategoryAccountId`/`suggestionSource` (Kategorie-Vorschlag, siehe unten) und Doubletten-Hinweis (siehe unten).
 3. **`POST /import/commit`** `{defaultAccountId, rows: [{date, amountCents, description, payeeName, categoryAccountId}]}` → legt für jede Zeile eine 2-Zeilen-Buchung an (`defaultAccountId` ↔ `categoryAccountId`, gleiche Vorzeichenlogik wie in Abschnitt 4). `categoryAccountId` ist **nicht** auf `expense`/`income` beschränkt — auch ein anderes Aktiva-/Passiva-Konto ist zulässig, um echte Kontoumbuchungen (z. B. die monatliche Kreditkarten-Ausgleichszahlung) direkt beim Import korrekt als Umbuchung statt als Kategorie zu erfassen.
 
 `defaultAccountId` ist seit der Doubletten-Erkennung schon in `preview` Pflicht (nicht erst in `commit`), weil der Abgleich das Ziel-Konto kennen muss.
 
 Datums-Parser versteht `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`; Betrags-Parser versteht deutsche Schreibweise (`1.234,56`, `-45,90`).
+
+`skipRows` (Default 0, 0-basiert) überspringt eine feste Anzahl führender Zeilen, **bevor** Trennzeichen-Erkennung und Parsing laufen — für Bank-Exports mit Metadaten vor der eigentlichen Tabelle (z. B. MLP Banking AG: Kontoinhaber/Zeitraum/IBAN in den Zeilen 1–14, Spaltenüberschrift erst in Zeile 15 → `skipRows: 14`). Muss in `parse` und `preview` denselben Wert tragen, sonst zeigen die in `parse` ermittelten Spalten-Indizes auf die falschen Zeilen.
+
+**Kategorie-Vorschlag:** Zwei Quellen, in dieser Reihenfolge. (1) `payee` — ein exakt bekannter Zahlungsempfänger (`payees.name`), Kategorie = die bei diesem Zahlungsempfänger bisher am häufigsten gebuchte. (2) Falls kein Zahlungsempfänger passt, Fallback `similarBooking`: sucht frühere Buchungen auf `defaultAccountId` mit **exakt demselben** `amountCents`, vergleicht deren Verwendungszweck unscharf mit dem aktuellen (Wortmengen-Überlappung nach Entfernen von Ziffern und deutschen Monatsnamen, z. B. wird "Miete Juli" mit "Miete August" auf "miete" reduziert und erkannt) und übernimmt bei einer Ähnlichkeit ≥ 0,5 deren Gegenkonto — bewusst **kein** Filter auf `expense`/`income`, damit auch wiederkehrende Umbuchungen erkannt werden. Bewusst keine Volltextsuche/FTS5: Der SQL-Filter auf exakten Betrag hält die Kandidatenmenge klein genug, dass ein einfacher Wortmengen-Vergleich in der Anwendungslogik reicht — angemessen für die Datengröße einer privaten Finanz-App. Bei `similarBooking` trägt die Zeile zusätzlich `similarBookingOf: {transactionId, date, description}` mit der gefundenen Vorbuchung.
 
 **Doubletten-Erkennung:** Jede Vorschau-Zeile trägt zusätzlich `possibleDuplicate` und (falls `true`) `duplicateOf: {transactionId, date, description}`. Ein Treffer liegt vor, wenn auf `defaultAccountId` bereits eine Buchung mit **exakt gleichem, vorzeichenbehaftetem** `amountCents` existiert, deren Datum innerhalb von **±3 Tagen** um das Zeilendatum liegt. Bewusst **kein** Text-/Beschreibungsabgleich — z. B. liest sich derselbe Kreditkarten-Ausgleich im Girokonto- und im Kreditkarten-Auszug meist komplett unterschiedlich, während Datum und Betrag (aus Sicht des jeweiligen Kontos) übereinstimmen. Das ist eine Heuristik, keine exakte Erkennung (keine Bank-Transaktions-ID im generischen CSV-Format); wer die Vorlagen ohne die mitgelieferte UI nutzt, sollte `possibleDuplicate`-Zeilen standardmäßig von `commit` ausschließen und nur bei bewusster Prüfung einschließen.
 
@@ -186,7 +190,7 @@ Datums-Parser versteht `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`; Betrags-Parser 
 
 ```bash
 GET /api/import-templates
-POST /api/import-templates   # {name, delimiter, hasHeader, mapping: {date:{index,header}, amount:{...}, ...}, defaultAccountId?}
+POST /api/import-templates   # {name, delimiter, hasHeader, skipRows?, mapping: {date:{index,header}, amount:{...}, ...}, defaultAccountId?}
 DELETE /api/import-templates/{id}
 ```
 

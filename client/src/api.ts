@@ -141,6 +141,7 @@ export interface ImportTemplate {
   name: string;
   delimiter: string;
   hasHeader: boolean;
+  skipRows: number;
   mapping: ImportTemplateMapping;
   defaultAccountId: number | null;
 }
@@ -222,9 +223,9 @@ export const api = {
     return request<PayeeReportRow[]>(`/reports/by-payee?${params.toString()}`);
   },
 
-  importParse: (csvText: string) => request<{ delimiter: string; headers: string[]; sampleRows: string[][]; rowCount: number }>(
+  importParse: (csvText: string, skipRows = 0) => request<{ delimiter: string; headers: string[]; sampleRows: string[][]; rowCount: number }>(
     "/import/parse",
-    { method: "POST", body: JSON.stringify({ csvText }) }
+    { method: "POST", body: JSON.stringify({ csvText, skipRows }) }
   ),
   importPreview: (data: {
     csvText: string;
@@ -232,6 +233,7 @@ export const api = {
     hasHeader: boolean;
     mapping: { date: number; amount: number; description?: number; payee?: number };
     defaultAccountId: number;
+    skipRows?: number;
   }) =>
     request<{
       rows: {
@@ -243,6 +245,8 @@ export const api = {
         payeeName: string | null;
         suggestedCategoryAccountId: number | null;
         suggestedCategoryAccountName: string | null;
+        suggestionSource: "payee" | "similarBooking" | null;
+        similarBookingOf: { transactionId: number; date: string; description: string | null } | null;
         possibleDuplicate: boolean;
         duplicateOf: { transactionId: number; date: string; description: string | null } | null;
         valid: boolean;
@@ -258,6 +262,7 @@ export const api = {
     name: string;
     delimiter: string;
     hasHeader: boolean;
+    skipRows: number;
     mapping: ImportTemplateMapping;
     defaultAccountId?: number | null;
   }) => request<{ id: number }>("/import-templates", { method: "POST", body: JSON.stringify(data) }),

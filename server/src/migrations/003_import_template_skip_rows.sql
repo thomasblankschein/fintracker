@@ -1,0 +1,1 @@
+ALTER TABLE import_templates ADD COLUMN skip_rows INTEGER NOT NULL DEFAULT 0;

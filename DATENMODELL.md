@@ -48,6 +48,7 @@ erDiagram
         text name "UNIQUE"
         text delimiter
         integer has_header "0/1"
+        integer skip_rows "führende Zeilen vor Header/Daten, Default 0"
         text mapping "JSON: {date,amount,description?,payee?} je {index,header}"
         integer default_account_id FK "nullable"
     }
@@ -80,7 +81,7 @@ Herzstück der doppelten Buchhaltung: mindestens 2 Zeilen pro Transaktion, `amou
 Vorlagen für Extrapolation (Prognose) und "Jetzt buchen". Fix auf **zwei** Konten (`from`/`to`) begrenzt — für Aufteilungen (z. B. Zins/Tilgung bei einer Hypothek) reicht das nicht, dafür muss weiterhin manuell mit Splits gebucht werden. `last_booked_date` verhindert, dass ein bereits verbuchtes Vorkommen erneut als "fällig" auftaucht.
 
 ### `import_templates` — CSV-Import-Vorlagen
-Speichert Spalten-Zuordnung, Trennzeichen und Ziel-Konto für wiederkehrend gleich strukturierte CSV-Exporte (z. B. der monatliche Kreditkarten-Export derselben Bank). Das Mapping liegt als **JSON-Text** in `mapping` statt als eigene Spalten je Feld — hält die Tabelle schlank, analog zu `postings` als "flexible" Tabelle im Kernschema. Jedes gemappte Feld (`date`, `amount`, optional `description`/`payee`) trägt sowohl den Spalten-**Index** als auch den **Header-Text** zum Speicherzeitpunkt: beim Anwenden auf eine neue Datei wird zuerst per Header-Text gesucht (übersteht leicht andere Spaltenreihenfolge bei künftigen Exporten), erst bei fehlendem Treffer auf den Index zurückgefallen. `default_account_id` ist optional und wird beim Anwenden als Ziel-Konto vorausgefüllt.
+Speichert Spalten-Zuordnung, Trennzeichen und Ziel-Konto für wiederkehrend gleich strukturierte CSV-Exporte (z. B. der monatliche Kreditkarten-Export derselben Bank). Das Mapping liegt als **JSON-Text** in `mapping` statt als eigene Spalten je Feld — hält die Tabelle schlank, analog zu `postings` als "flexible" Tabelle im Kernschema. Jedes gemappte Feld (`date`, `amount`, optional `description`/`payee`) trägt sowohl den Spalten-**Index** als auch den **Header-Text** zum Speicherzeitpunkt: beim Anwenden auf eine neue Datei wird zuerst per Header-Text gesucht (übersteht leicht andere Spaltenreihenfolge bei künftigen Exporten), erst bei fehlendem Treffer auf den Index zurückgefallen. `default_account_id` ist optional und wird beim Anwenden als Ziel-Konto vorausgefüllt. `skip_rows` (Default 0, seit [003_import_template_skip_rows.sql](server/src/migrations/003_import_template_skip_rows.sql)) überspringt eine feste Anzahl führender Zeilen vor Trennzeichen-Erkennung und Parsing — nötig bei Bank-Exports mit Metadaten-Zeilen vor der echten Überschrift (z. B. MLP Banking AG: Überschrift erst ab Zeile 15, also `skip_rows = 14`).
 
 ## Kernentscheidung: ein Vorzeichen statt Soll/Haben
 

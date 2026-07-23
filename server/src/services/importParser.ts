@@ -1,3 +1,9 @@
+/** Entfernt eine feste Anzahl führender Zeilen, z. B. Metadaten vor der eigentlichen Überschriftenzeile. */
+export function applySkipRows(text: string, skipRows: number): string {
+  if (!skipRows || skipRows <= 0) return text;
+  return text.split(/\r?\n/).slice(skipRows).join("\n");
+}
+
 export function detectDelimiter(text: string): string {
   const firstLine = text.split(/\r?\n/)[0] ?? "";
   const semicolons = firstLine.split(";").length;

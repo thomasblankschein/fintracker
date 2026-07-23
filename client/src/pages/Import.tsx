@@ -10,6 +10,8 @@ interface PreviewRow {
   description: string;
   payeeName: string | null;
   categoryAccountId: number | "";
+  suggestionSource: "payee" | "similarBooking" | null;
+  similarBookingOf: { transactionId: number; date: string; description: string | null } | null;
   possibleDuplicate: boolean;
   duplicateOf: { transactionId: number; date: string; description: string | null } | null;
   valid: boolean;
@@ -25,6 +27,7 @@ export default function Import() {
   const [delimiter, setDelimiter] = useState(",");
   const [headers, setHeaders] = useState<string[]>([]);
   const [hasHeader, setHasHeader] = useState(true);
+  const [skipRows, setSkipRows] = useState(0);
 
   const [dateCol, setDateCol] = useState<number | "">("");
   const [amountCol, setAmountCol] = useState<number | "">("");
@@ -67,6 +70,7 @@ export default function Import() {
     };
     setDelimiter(template.delimiter);
     setHasHeader(template.hasHeader);
+    setSkipRows(template.skipRows);
     setDateCol(resolve(template.mapping.date));
     setAmountCol(resolve(template.mapping.amount));
     setDescriptionCol(resolve(template.mapping.description));
@@ -74,10 +78,31 @@ export default function Import() {
     if (template.defaultAccountId) setDefaultAccountId(template.defaultAccountId);
   };
 
-  const onSelectTemplate = (id: number) => {
+  const onSelectTemplate = async (id: number) => {
     setSelectedTemplateId(id);
     const template = templates.find((t) => t.id === id);
-    if (template) applyTemplate(template, headers);
+    if (!template) return;
+    try {
+      const parsed = await api.importParse(csvText, template.skipRows);
+      setHeaders(parsed.headers);
+      applyTemplate(template, parsed.headers);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const updateSkipRows = async (displayValue: number) => {
+    const newSkip = Math.max(0, Math.round(displayValue) - 1);
+    setSkipRows(newSkip);
+    try {
+      const parsed = await api.importParse(csvText, newSkip);
+      setDelimiter(parsed.delimiter);
+      setHeaders(parsed.headers);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    }
   };
 
   const removeTemplate = async (id: number) => {
@@ -99,7 +124,7 @@ export default function Import() {
       const mapping: any = { date: dateCol, amount: amountCol };
       if (descriptionCol !== "") mapping.description = descriptionCol;
       if (payeeCol !== "") mapping.payee = payeeCol;
-      const res = await api.importPreview({ csvText, delimiter, hasHeader, mapping, defaultAccountId });
+      const res = await api.importPreview({ csvText, delimiter, hasHeader, mapping, defaultAccountId, skipRows });
       setRows(
         res.rows.map((r) => ({
           ...r,
@@ -165,6 +190,7 @@ export default function Import() {
         name: templateName.trim(),
         delimiter,
         hasHeader,
+        skipRows,
         mapping,
         defaultAccountId: defaultAccountId || null,
       });
@@ -186,6 +212,7 @@ export default function Import() {
     setAmountCol("");
     setDescriptionCol("");
     setPayeeCol("");
+    setSkipRows(0);
     setDefaultAccountId("");
     setSelectedTemplateId("");
     setTemplateName("");
@@ -265,10 +292,23 @@ export default function Import() {
 
           <div className="form-row">
             <label>
+              Erste Zeile
+              <input
+                type="number"
+                min={1}
+                value={skipRows + 1}
+                onChange={(e) => updateSkipRows(Number(e.target.value))}
+                style={{ width: "5rem" }}
+              />
+            </label>
+            <label>
               <input type="checkbox" checked={hasHeader} onChange={(e) => setHasHeader(e.target.checked)} />
-              {" "}Erste Zeile ist Überschrift
+              {" "}Diese Zeile ist die Überschrift
             </label>
           </div>
+          <p className="muted" style={{ marginTop: "-0.5rem" }}>
+            Bei Exports mit Metadaten vor der eigentlichen Tabelle (z. B. MLP Banking AG: Überschriften erst ab Zeile 15) hier die Zeilennummer der Überschrift bzw. ersten Datenzeile eintragen.
+          </p>
           <div className="form-row">
             <label>
               Datum-Spalte
@@ -391,6 +431,14 @@ export default function Import() {
                           title={`Vermutlich bereits vorhanden: ${r.duplicateOf.date}${r.duplicateOf.description ? " – " + r.duplicateOf.description : ""}`}
                         >
                           ⚠ evtl. Duplikat
+                        </span>
+                      )}
+                      {!r.possibleDuplicate && r.suggestionSource === "similarBooking" && r.similarBookingOf && (
+                        <span
+                          className="pill"
+                          title={`Vorschlag anhand ähnlicher Buchung vom ${r.similarBookingOf.date}${r.similarBookingOf.description ? ": „" + r.similarBookingOf.description + "“" : ""}`}
+                        >
+                          ähnliche Buchung
                         </span>
                       )}
                     </td>

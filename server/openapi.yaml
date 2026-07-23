@@ -396,6 +396,10 @@ paths:
               required: [csvText]
               properties:
                 csvText: { type: string }
+                skipRows:
+                  type: integer
+                  default: 0
+                  description: "Anzahl führender Zeilen, die vor Trennzeichen-Erkennung und Parsing übersprungen werden (z. B. Metadaten vor der echten Überschriftenzeile)"
       responses:
         "200":
           description: Erkannte Struktur
@@ -762,6 +766,10 @@ components:
         hasHeader: { type: boolean }
         mapping: { $ref: "#/components/schemas/ImportColumnMapping" }
         defaultAccountId: { type: integer, description: "Ziel-Konto der CSV — wird auch für den Doubletten-Abgleich benötigt" }
+        skipRows:
+          type: integer
+          default: 0
+          description: "Anzahl führender Zeilen, die vor dem Parsing übersprungen werden — muss zum Wert aus /import/parse passen"
 
     ImportDuplicateMatch:
       type: object
@@ -781,6 +789,15 @@ components:
         payeeName: { type: string, nullable: true }
         suggestedCategoryAccountId: { type: integer, nullable: true }
         suggestedCategoryAccountName: { type: string, nullable: true }
+        suggestionSource:
+          type: string
+          enum: [payee, similarBooking]
+          nullable: true
+          description: "Woher der Kategorie-Vorschlag stammt: 'payee' = bekannter Zahlungsempfänger, 'similarBooking' = unscharfer Treffer über exakten Betrag + ähnlichen Verwendungszweck (Wort-Überlappung nach Ziffern-/Monatsnamen-Bereinigung)"
+        similarBookingOf:
+          allOf: [{ $ref: "#/components/schemas/ImportDuplicateMatch" }]
+          nullable: true
+          description: "Bei suggestionSource='similarBooking': die frühere Buchung, aus der der Vorschlag übernommen wurde"
         possibleDuplicate: { type: boolean, description: "true, wenn auf dem Ziel-Konto bereits eine Buchung mit exakt gleichem Betrag innerhalb von ±3 Tagen existiert" }
         duplicateOf:
           allOf: [{ $ref: "#/components/schemas/ImportDuplicateMatch" }]
@@ -829,6 +846,7 @@ components:
         name: { type: string }
         delimiter: { type: string }
         hasHeader: { type: boolean }
+        skipRows: { type: integer, description: "Anzahl führender Zeilen, die vor dem Parsing übersprungen werden" }
         mapping: { $ref: "#/components/schemas/ImportTemplateMapping" }
         defaultAccountId: { type: integer, nullable: true }
 
@@ -839,5 +857,6 @@ components:
         name: { type: string }
         delimiter: { type: string }
         hasHeader: { type: boolean }
+        skipRows: { type: integer, default: 0, description: "Anzahl führender Zeilen, die vor dem Parsing übersprungen werden" }
         mapping: { $ref: "#/components/schemas/ImportTemplateMapping" }
         defaultAccountId: { type: integer, nullable: true }

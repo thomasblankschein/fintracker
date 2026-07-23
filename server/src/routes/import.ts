@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, transaction } from "../db.js";
-import { detectDelimiter, parseCsv, parseAmountToCents, parseDateToIso } from "../services/importParser.js";
+import { applySkipRows, detectDelimiter, parseCsv, parseAmountToCents, parseDateToIso } from "../services/importParser.js";
+import { tokenSimilarity } from "../services/similarity.js";
 
 export const importRouter = Router();
 
@@ -55,12 +56,13 @@ function findDuplicate(accountId: number, amountCents: number, date: string): Du
 }
 
 importRouter.post("/parse", (req, res) => {
-  const { csvText } = req.body ?? {};
+  const { csvText, skipRows } = req.body ?? {};
   if (!csvText || typeof csvText !== "string") {
     return res.status(400).json({ error: "csvText ist erforderlich." });
   }
-  const delimiter = detectDelimiter(csvText);
-  const rows = parseCsv(csvText, delimiter);
+  const relevantText = applySkipRows(csvText, Number(skipRows) || 0);
+  const delimiter = detectDelimiter(relevantText);
+  const rows = parseCsv(relevantText, delimiter);
   if (rows.length === 0) return res.status(400).json({ error: "Datei ist leer." });
   res.json({
     delimiter,
@@ -88,13 +90,74 @@ function suggestCategoryForPayee(payeeName: string | undefined): { id: number; n
   return row ? { id: row.id, name: row.name } : null;
 }
 
+const SIMILARITY_THRESHOLD = 0.5;
+
+interface SimilarBookingMatch {
+  accountId: number;
+  accountName: string;
+  transactionId: number;
+  date: string;
+  description: string | null;
+}
+
+/**
+ * Fällt zurück auf eine unscharfe Erkennung, wenn kein bekannter Zahlungsempfänger passt: sucht frühere
+ * Buchungen auf demselben Konto mit exakt demselben Betrag (Kandidaten, per SQL vorgefiltert) und wählt
+ * per Wort-Überlappung im Verwendungszweck die ähnlichste — z. B. "Miete Juli" vs. "Miete August".
+ */
+function suggestCategoryBySimilarBooking(
+  accountId: number,
+  amountCents: number,
+  description: string
+): SimilarBookingMatch | null {
+  if (!description.trim()) return null;
+  const candidates = db
+    .prepare(
+      `SELECT t.id AS transactionId, t.date, t.description, po2.account_id AS categoryAccountId, a.name AS categoryAccountName
+       FROM postings po
+       JOIN transactions t ON t.id = po.transaction_id
+       JOIN postings po2 ON po2.transaction_id = t.id AND po2.account_id != po.account_id
+       JOIN accounts a ON a.id = po2.account_id
+       WHERE po.account_id = ? AND po.amount_cents = ?
+         AND (SELECT COUNT(*) FROM postings WHERE transaction_id = t.id) = 2
+       ORDER BY t.date DESC
+       LIMIT 50`
+    )
+    .all(accountId, amountCents) as {
+    transactionId: number;
+    date: string;
+    description: string | null;
+    categoryAccountId: number;
+    categoryAccountName: string;
+  }[];
+
+  let best: (typeof candidates)[number] | null = null;
+  let bestScore = 0;
+  for (const c of candidates) {
+    const score = tokenSimilarity(description, c.description ?? "");
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  if (!best || bestScore < SIMILARITY_THRESHOLD) return null;
+  return {
+    accountId: best.categoryAccountId,
+    accountName: best.categoryAccountName,
+    transactionId: best.transactionId,
+    date: best.date,
+    description: best.description,
+  };
+}
+
 importRouter.post("/preview", (req, res) => {
-  const { csvText, delimiter, mapping, hasHeader, defaultAccountId } = req.body as {
+  const { csvText, delimiter, mapping, hasHeader, defaultAccountId, skipRows } = req.body as {
     csvText: string;
     delimiter: string;
     mapping: ColumnMapping;
     hasHeader: boolean;
     defaultAccountId: number;
+    skipRows?: number;
   };
   if (!csvText || !mapping || mapping.date === undefined || mapping.amount === undefined) {
     return res.status(400).json({ error: "csvText und mapping (date, amount) sind erforderlich." });
@@ -103,7 +166,7 @@ importRouter.post("/preview", (req, res) => {
     return res.status(400).json({ error: "defaultAccountId ist erforderlich (Ziel-Konto der CSV)." });
   }
 
-  const allRows = parseCsv(csvText, delimiter);
+  const allRows = parseCsv(applySkipRows(csvText, Number(skipRows) || 0), delimiter);
   const dataRows = hasHeader ? allRows.slice(1) : allRows;
 
   const preview = dataRows.map((row, index) => {
@@ -114,7 +177,11 @@ importRouter.post("/preview", (req, res) => {
 
     const date = parseDateToIso(rawDate);
     const amountCents = parseAmountToCents(rawAmount);
-    const suggestion = suggestCategoryForPayee(payeeName || description);
+    const paySuggestion = suggestCategoryForPayee(payeeName);
+    const similarSuggestion =
+      !paySuggestion && amountCents !== null
+        ? suggestCategoryBySimilarBooking(defaultAccountId, amountCents, description)
+        : null;
     const duplicateOf = date !== null && amountCents !== null ? findDuplicate(defaultAccountId, amountCents, date) : null;
 
     return {
@@ -124,8 +191,12 @@ importRouter.post("/preview", (req, res) => {
       amountCents,
       description,
       payeeName: payeeName || null,
-      suggestedCategoryAccountId: suggestion?.id ?? null,
-      suggestedCategoryAccountName: suggestion?.name ?? null,
+      suggestedCategoryAccountId: paySuggestion?.id ?? similarSuggestion?.accountId ?? null,
+      suggestedCategoryAccountName: paySuggestion?.name ?? similarSuggestion?.accountName ?? null,
+      suggestionSource: paySuggestion ? "payee" : similarSuggestion ? "similarBooking" : null,
+      similarBookingOf: similarSuggestion
+        ? { transactionId: similarSuggestion.transactionId, date: similarSuggestion.date, description: similarSuggestion.description }
+        : null,
       possibleDuplicate: duplicateOf !== null,
       duplicateOf,
       valid: date !== null && amountCents !== null && amountCents !== 0,
