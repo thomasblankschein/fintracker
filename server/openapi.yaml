@@ -116,7 +116,7 @@ paths:
       - $ref: "#/components/parameters/IdParam"
     patch:
       tags: [Accounts]
-      summary: Konto ändern (Name, übergeordnetes Konto, aktiv/inaktiv)
+      summary: Konto ändern (Name, übergeordnetes Konto, aktiv/inaktiv). Beim Ändern von parentId wird gegen Zyklen (Verschieben in ein eigenes Unterkonto) und Typwechsel (Zielkonto muss denselben Kontotyp haben) geprüft.
       requestBody:
         content:
           application/json:

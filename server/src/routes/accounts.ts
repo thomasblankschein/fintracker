@@ -13,6 +13,19 @@ interface AccountRow {
   is_active: number;
 }
 
+function isSelfOrDescendant(accountId: number, candidateId: number): boolean {
+  let current: number | null = candidateId;
+  const seen = new Set<number>();
+  while (current !== null) {
+    if (current === accountId) return true;
+    if (seen.has(current)) break;
+    seen.add(current);
+    const row = db.prepare("SELECT parent_id FROM accounts WHERE id = ?").get(current) as { parent_id: number | null } | undefined;
+    current = row ? row.parent_id : null;
+  }
+  return false;
+}
+
 function ownBalances(): Map<number, number> {
   const rows = db
     .prepare("SELECT account_id, SUM(amount_cents) AS total FROM postings GROUP BY account_id")
@@ -88,7 +101,7 @@ accountsRouter.post("/", (req, res) => {
 accountsRouter.patch("/:id", (req, res) => {
   const id = Number(req.params.id);
   const { name, parentId, isActive } = req.body ?? {};
-  const existing = db.prepare("SELECT * FROM accounts WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT * FROM accounts WHERE id = ?").get(id) as AccountRow | undefined;
   if (!existing) return res.status(404).json({ error: "Konto nicht gefunden." });
 
   if (name !== undefined) {
@@ -98,6 +111,20 @@ accountsRouter.patch("/:id", (req, res) => {
     db.prepare("UPDATE accounts SET name = ? WHERE id = ?").run(name.trim(), id);
   }
   if (parentId !== undefined) {
+    if (parentId !== null) {
+      const targetParent = db.prepare("SELECT id, type FROM accounts WHERE id = ?").get(parentId) as
+        | { id: number; type: string }
+        | undefined;
+      if (!targetParent) {
+        return res.status(400).json({ error: "Übergeordnetes Konto nicht gefunden." });
+      }
+      if (isSelfOrDescendant(id, parentId)) {
+        return res.status(400).json({ error: "Konto kann nicht in sich selbst oder ein eigenes Unterkonto verschoben werden." });
+      }
+      if (targetParent.type !== existing.type) {
+        return res.status(400).json({ error: "Übergeordnetes Konto muss vom selben Kontotyp sein." });
+      }
+    }
     db.prepare("UPDATE accounts SET parent_id = ? WHERE id = ?").run(parentId, id);
   }
   if (isActive !== undefined) {

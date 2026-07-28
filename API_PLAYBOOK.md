@@ -31,6 +31,8 @@ PATCH /api/accounts/{id}   # {name?, parentId?, isActive?}
 DELETE /api/accounts/{id}  # nur ohne Buchungen/Unterkonten, sonst isActive:false setzen
 ```
 
+Beim Ändern von `parentId` (Konto verschieben) prüft der Server zwei Dinge und antwortet sonst mit 400: das Zielkonto darf nicht das Konto selbst oder einer seiner eigenen Nachfahren sein (sonst Zyklus in der Baum-Traversierung), und es muss denselben Kontotyp haben wie das verschobene Konto (sonst würden Salden typübergreifend und damit inhaltlich sinnlos aufsummiert).
+
 Beispielausschnitt aus `GET /accounts`:
 
 ```json

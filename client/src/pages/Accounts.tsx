@@ -53,6 +53,15 @@ export default function Accounts() {
     }
   };
 
+  const move = async (node: AccountNode, newParentId: number | null) => {
+    try {
+      await api.updateAccount(node.id, { parentId: newParentId });
+      load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const remove = async (node: AccountNode) => {
     try {
       await api.deleteAccount(node.id);
@@ -187,9 +196,11 @@ export default function Accounts() {
                 key={node.id}
                 node={node}
                 depth={0}
+                tree={tree}
                 onToggle={toggleActive}
                 onDelete={remove}
                 onRename={rename}
+                onMove={move}
               />
             ))
           )}
@@ -199,21 +210,38 @@ export default function Accounts() {
   );
 }
 
+function collectDescendantIds(node: AccountNode): Set<number> {
+  const ids = new Set<number>();
+  const walk = (n: AccountNode) => {
+    for (const c of n.children) {
+      ids.add(c.id);
+      walk(c);
+    }
+  };
+  walk(node);
+  return ids;
+}
+
 function AccountRow({
   node,
   depth,
+  tree,
   onToggle,
   onDelete,
   onRename,
+  onMove,
 }: {
   node: AccountNode;
   depth: number;
+  tree: AccountNode[];
   onToggle: (n: AccountNode) => void;
   onDelete: (n: AccountNode) => void;
   onRename: (n: AccountNode, newName: string) => void;
+  onMove: (n: AccountNode, newParentId: number | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.name);
+  const [moving, setMoving] = useState(false);
 
   const startEdit = () => {
     setDraft(node.name);
@@ -227,6 +255,13 @@ function AccountRow({
     }
     setEditing(false);
   };
+
+  const moveCandidates = (() => {
+    const descendantIds = collectDescendantIds(node);
+    return flattenAccounts(tree).filter(
+      ({ node: candidate }) => candidate.type === node.type && candidate.id !== node.id && !descendantIds.has(candidate.id)
+    );
+  })();
 
   return (
     <div className="tree-node">
@@ -242,6 +277,28 @@ function AccountRow({
               if (e.key === "Escape") setEditing(false);
             }}
           />
+        ) : moving ? (
+          <select
+            autoFocus
+            value={node.parentId ?? ""}
+            onChange={(e) => {
+              const value = e.target.value;
+              onMove(node, value === "" ? null : Number(value));
+              setMoving(false);
+            }}
+            onBlur={() => setMoving(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setMoving(false);
+            }}
+          >
+            <option value="">— kein (Wurzel) —</option>
+            {moveCandidates.map(({ node: candidate, depth: candidateDepth }) => (
+              <option key={candidate.id} value={candidate.id}>
+                {"  ".repeat(candidateDepth)}
+                {candidate.name}
+              </option>
+            ))}
+          </select>
         ) : (
           <span style={{ opacity: node.isActive ? 1 : 0.5 }}>
             {node.name}
@@ -253,13 +310,23 @@ function AccountRow({
           <AccountMenu
             isActive={node.isActive}
             onRename={startEdit}
+            onMove={() => setMoving(true)}
             onToggle={() => onToggle(node)}
             onDelete={() => onDelete(node)}
           />
         </div>
       </div>
       {node.children.map((child) => (
-        <AccountRow key={child.id} node={child} depth={depth + 1} onToggle={onToggle} onDelete={onDelete} onRename={onRename} />
+        <AccountRow
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          tree={tree}
+          onToggle={onToggle}
+          onDelete={onDelete}
+          onRename={onRename}
+          onMove={onMove}
+        />
       ))}
     </div>
   );
@@ -268,11 +335,13 @@ function AccountRow({
 function AccountMenu({
   isActive,
   onRename,
+  onMove,
   onToggle,
   onDelete,
 }: {
   isActive: boolean;
   onRename: () => void;
+  onMove: () => void;
   onToggle: () => void;
   onDelete: () => void;
 }) {
@@ -302,6 +371,9 @@ function AccountMenu({
         <div className="menu-dropdown">
           <button type="button" onClick={() => run(onRename)}>
             Umbenennen
+          </button>
+          <button type="button" onClick={() => run(onMove)}>
+            Verschieben
           </button>
           <button type="button" onClick={() => run(onToggle)}>
             {isActive ? "Deaktivieren" : "Aktivieren"}
