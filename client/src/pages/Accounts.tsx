@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, AccountExportNode, AccountNode, AccountType, flattenAccounts, formatCents } from "../api";
 
 const TYPE_LABELS: Record<AccountType, string> = {
@@ -242,6 +243,7 @@ function AccountRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.name);
   const [moving, setMoving] = useState(false);
+  const navigate = useNavigate();
 
   const startEdit = () => {
     setDraft(node.name);
@@ -311,6 +313,7 @@ function AccountRow({
             isActive={node.isActive}
             onRename={startEdit}
             onMove={() => setMoving(true)}
+            onViewTransactions={() => navigate(`/buchungen?account=${node.id}`)}
             onToggle={() => onToggle(node)}
             onDelete={() => onDelete(node)}
           />
@@ -336,12 +339,14 @@ function AccountMenu({
   isActive,
   onRename,
   onMove,
+  onViewTransactions,
   onToggle,
   onDelete,
 }: {
   isActive: boolean;
   onRename: () => void;
   onMove: () => void;
+  onViewTransactions: () => void;
   onToggle: () => void;
   onDelete: () => void;
 }) {
@@ -374,6 +379,9 @@ function AccountMenu({
           </button>
           <button type="button" onClick={() => run(onMove)}>
             Verschieben
+          </button>
+          <button type="button" onClick={() => run(onViewTransactions)}>
+            Buchungen ansehen
           </button>
           <button type="button" onClick={() => run(onToggle)}>
             {isActive ? "Deaktivieren" : "Aktivieren"}
