@@ -463,9 +463,9 @@ export default function Import() {
                 <tr>
                   <th>Datum</th>
                   <th>Betrag</th>
-                  <th>Beschreibung</th>
+                  <th style={{ maxWidth: "22rem" }}>Beschreibung</th>
                   <th>Zahlungsempfänger</th>
-                  <th>Kategorie / Gegenkonto</th>
+                  <th style={{ minWidth: "18rem" }}>Kategorie / Gegenkonto</th>
                   <th></th>
                 </tr>
               </thead>
@@ -480,7 +480,7 @@ export default function Import() {
                   >
                     <td>{r.date ?? `ungültig: ${r.rawDate}`}</td>
                     <td>{r.amountCents !== null ? formatCents(r.amountCents) : "ungültig"}</td>
-                    <td>{r.description}</td>
+                    <td style={{ maxWidth: "22rem", overflowWrap: "anywhere" }}>{r.description}</td>
                     <td>{r.payeeName ?? "—"}</td>
                     <td>
                       {!r.splitMode ? (
@@ -512,18 +512,18 @@ export default function Import() {
                                 value={s.accountId}
                                 onChange={(id) => updateSplitEntry(r.rowIndex, i, { accountId: id })}
                                 excludeId={defaultAccountId || undefined}
-                                style={{ flex: "1 1 9rem", minWidth: "7rem", maxWidth: "20rem" }}
+                                style={{ flexGrow: 0, flexShrink: 0, width: "9rem" }}
                               />
                               <input
                                 value={s.amountEuro}
                                 onChange={(e) => updateSplitEntry(r.rowIndex, i, { amountEuro: e.target.value })}
                                 placeholder="Betrag"
-                                style={{ width: "5.5rem", flexShrink: 0 }}
+                                style={{ width: "5.5rem", flexGrow: 0, flexShrink: 0 }}
                               />
                               <button
                                 type="button"
                                 className="secondary"
-                                style={{ fontSize: "0.75rem", padding: "0.2rem 0.4rem", flexShrink: 0 }}
+                                style={{ fontSize: "0.75rem", padding: "0.2rem 0.4rem", flexGrow: 0, flexShrink: 0 }}
                                 onClick={() => removeSplitEntry(r.rowIndex, i)}
                                 disabled={r.splits.length <= 2}
                               >
