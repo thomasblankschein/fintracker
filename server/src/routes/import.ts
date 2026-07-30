@@ -214,7 +214,7 @@ importRouter.post("/commit", (req, res) => {
       amountCents: number;
       description: string;
       payeeName: string | null;
-      categoryAccountId: number;
+      postings: { accountId: number; amountCents: number }[];
     }[];
   };
 
@@ -232,7 +232,11 @@ importRouter.post("/commit", (req, res) => {
   let created = 0;
   transaction(() => {
     for (const row of rows) {
-      if (!row.categoryAccountId || !row.date || !row.amountCents) continue;
+      if (!row.date || !row.amountCents || !Array.isArray(row.postings) || row.postings.length === 0) continue;
+      if (row.postings.some((p) => !p.accountId || !p.amountCents)) continue;
+      const postingsSum = row.postings.reduce((sum, p) => sum + Math.round(p.amountCents), 0);
+      if (postingsSum !== -Math.round(row.amountCents)) continue;
+
       const payeeId = findOrCreatePayee(row.payeeName);
       const txResult = db
         .prepare("INSERT INTO transactions (date, description, payee_id) VALUES (?, ?, ?)")
@@ -243,11 +247,13 @@ importRouter.post("/commit", (req, res) => {
         defaultAccountId,
         Math.round(row.amountCents)
       );
-      db.prepare("INSERT INTO postings (transaction_id, account_id, amount_cents) VALUES (?, ?, ?)").run(
-        txId,
-        row.categoryAccountId,
-        -Math.round(row.amountCents)
-      );
+      for (const p of row.postings) {
+        db.prepare("INSERT INTO postings (transaction_id, account_id, amount_cents) VALUES (?, ?, ?)").run(
+          txId,
+          p.accountId,
+          Math.round(p.amountCents)
+        );
+      }
       created++;
     }
   });

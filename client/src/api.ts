@@ -254,7 +254,13 @@ export const api = {
     }>("/import/preview", { method: "POST", body: JSON.stringify(data) }),
   importCommit: (data: {
     defaultAccountId: number;
-    rows: { date: string; amountCents: number; description: string; payeeName: string | null; categoryAccountId: number }[];
+    rows: {
+      date: string;
+      amountCents: number;
+      description: string;
+      payeeName: string | null;
+      postings: { accountId: number; amountCents: number }[];
+    }[];
   }) => request<{ created: number }>("/import/commit", { method: "POST", body: JSON.stringify(data) }),
 
   getImportTemplates: () => request<ImportTemplate[]>("/import-templates"),
@@ -271,6 +277,13 @@ export const api = {
 
 export function formatCents(cents: number): string {
   return (cents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+}
+
+export function parseEuroToCents(input: string): number | null {
+  const normalized = input.trim().replace(",", ".");
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || normalized === "") return null;
+  return Math.round(value * 100);
 }
 
 export function flattenAccounts(nodes: AccountNode[], depth = 0): { node: AccountNode; depth: number }[] {

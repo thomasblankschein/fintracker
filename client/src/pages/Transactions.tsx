@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, AccountNode, Payee, Transaction, flattenAccounts, formatCents } from "../api";
+import { api, AccountNode, Payee, Transaction, flattenAccounts, formatCents, parseEuroToCents } from "../api";
 import AccountSelect from "../components/AccountSelect";
-
-function parseEuroToCents(input: string): number | null {
-  const normalized = input.trim().replace(",", ".");
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || normalized === "") return null;
-  return Math.round(value * 100);
-}
 
 interface SplitRow {
   accountId: number | "";

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, AccountNode, ImportFieldMapping, ImportTemplate, ImportTemplateMapping, flattenAccounts, formatCents } from "../api";
+import { api, AccountNode, ImportFieldMapping, ImportTemplate, ImportTemplateMapping, flattenAccounts, formatCents, parseEuroToCents } from "../api";
 import AccountSelect from "../components/AccountSelect";
+
+interface SplitEntry {
+  accountId: number | "";
+  amountEuro: string;
+}
 
 interface PreviewRow {
   rowIndex: number;
@@ -10,11 +15,26 @@ interface PreviewRow {
   description: string;
   payeeName: string | null;
   categoryAccountId: number | "";
+  splitMode: boolean;
+  splits: SplitEntry[];
   suggestionSource: "payee" | "similarBooking" | null;
   similarBookingOf: { transactionId: number; date: string; description: string | null } | null;
   possibleDuplicate: boolean;
   duplicateOf: { transactionId: number; date: string; description: string | null } | null;
   valid: boolean;
+}
+
+function splitSumCents(splits: SplitEntry[]): number {
+  return splits.reduce((sum, s) => sum + (parseEuroToCents(s.amountEuro) ?? 0), 0);
+}
+
+function rowIsValid(r: PreviewRow): boolean {
+  if (!r.valid || !r.date || r.amountCents === null) return false;
+  if (r.splitMode) {
+    if (r.splits.length === 0 || r.splits.some((s) => s.accountId === "" || s.amountEuro.trim() === "")) return false;
+    return splitSumCents(r.splits) === -r.amountCents;
+  }
+  return r.categoryAccountId !== "";
 }
 
 export default function Import() {
@@ -129,6 +149,8 @@ export default function Import() {
         res.rows.map((r) => ({
           ...r,
           categoryAccountId: r.possibleDuplicate ? "" : r.suggestedCategoryAccountId ?? "",
+          splitMode: false,
+          splits: [],
         }))
       );
       setStep(3);
@@ -142,12 +164,54 @@ export default function Import() {
     setRows((rs) => rs.map((r) => (r.rowIndex === rowIndex ? { ...r, categoryAccountId } : r)));
   };
 
+  const toggleSplitMode = (rowIndex: number) => {
+    setRows((rs) =>
+      rs.map((r) => {
+        if (r.rowIndex !== rowIndex) return r;
+        if (r.splitMode) {
+          return { ...r, splitMode: false };
+        }
+        const startAmount = r.amountCents !== null ? (-r.amountCents / 100).toFixed(2).replace(".", ",") : "";
+        return {
+          ...r,
+          splitMode: true,
+          splits: [
+            { accountId: r.categoryAccountId, amountEuro: r.categoryAccountId !== "" ? startAmount : "" },
+            { accountId: "", amountEuro: "" },
+          ],
+        };
+      })
+    );
+  };
+
+  const updateSplitEntry = (rowIndex: number, splitIndex: number, patch: Partial<SplitEntry>) => {
+    setRows((rs) =>
+      rs.map((r) =>
+        r.rowIndex === rowIndex
+          ? { ...r, splits: r.splits.map((s, i) => (i === splitIndex ? { ...s, ...patch } : s)) }
+          : r
+      )
+    );
+  };
+
+  const addSplitEntry = (rowIndex: number) => {
+    setRows((rs) =>
+      rs.map((r) => (r.rowIndex === rowIndex ? { ...r, splits: [...r.splits, { accountId: "", amountEuro: "" }] } : r))
+    );
+  };
+
+  const removeSplitEntry = (rowIndex: number, splitIndex: number) => {
+    setRows((rs) =>
+      rs.map((r) => (r.rowIndex === rowIndex ? { ...r, splits: r.splits.filter((_, i) => i !== splitIndex) } : r))
+    );
+  };
+
   const commit = async () => {
     if (!defaultAccountId) {
       setError("Bitte das Konto wählen, zu dem diese CSV gehört.");
       return;
     }
-    const validRows = rows.filter((r) => r.valid && r.categoryAccountId !== "" && r.date && r.amountCents !== null);
+    const validRows = rows.filter(rowIsValid);
     if (validRows.length === 0) {
       setError("Keine Zeilen zum Importieren ausgewählt — allen Zeilen fehlt eine Kategorie (ggf. wurden sie als mögliches Duplikat übersprungen).");
       return;
@@ -160,7 +224,9 @@ export default function Import() {
           amountCents: r.amountCents as number,
           description: r.description,
           payeeName: r.payeeName,
-          categoryAccountId: r.categoryAccountId as number,
+          postings: r.splitMode
+            ? r.splits.map((s) => ({ accountId: s.accountId as number, amountCents: parseEuroToCents(s.amountEuro) as number }))
+            : [{ accountId: r.categoryAccountId as number, amountCents: -(r.amountCents as number) }],
         })),
       });
       setResult(res.created);
@@ -221,7 +287,7 @@ export default function Import() {
   const columnOptions = headers.map((h, i) => ({ index: i, label: hasHeader ? h : `Spalte ${i + 1}` }));
   const flatAccounts = flattenAccounts(tree);
   const accountName = (id: number) => flatAccounts.find((a) => a.node.id === id)?.node.name ?? "?";
-  const validRowCount = rows.filter((r) => r.valid && r.categoryAccountId !== "").length;
+  const validRowCount = rows.filter(rowIsValid).length;
 
   return (
     <div>
@@ -417,12 +483,78 @@ export default function Import() {
                     <td>{r.description}</td>
                     <td>{r.payeeName ?? "—"}</td>
                     <td>
-                      <AccountSelect
-                        tree={tree}
-                        value={r.categoryAccountId}
-                        onChange={(id) => updateRowCategory(r.rowIndex, id)}
-                        excludeId={defaultAccountId || undefined}
-                      />
+                      {!r.splitMode ? (
+                        <>
+                          <AccountSelect
+                            tree={tree}
+                            value={r.categoryAccountId}
+                            onChange={(id) => updateRowCategory(r.rowIndex, id)}
+                            excludeId={defaultAccountId || undefined}
+                          />
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ marginTop: "0.35rem", fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                            onClick={() => toggleSplitMode(r.rowIndex)}
+                          >
+                            Aufteilen
+                          </button>
+                        </>
+                      ) : (
+                        <div>
+                          {r.splits.map((s, i) => (
+                            <div key={i} style={{ display: "flex", gap: "0.3rem", marginBottom: "0.3rem", alignItems: "center" }}>
+                              <AccountSelect
+                                tree={tree}
+                                value={s.accountId}
+                                onChange={(id) => updateSplitEntry(r.rowIndex, i, { accountId: id })}
+                                excludeId={defaultAccountId || undefined}
+                              />
+                              <input
+                                value={s.amountEuro}
+                                onChange={(e) => updateSplitEntry(r.rowIndex, i, { amountEuro: e.target.value })}
+                                placeholder="Betrag"
+                                style={{ width: "5.5rem" }}
+                              />
+                              <button
+                                type="button"
+                                className="secondary"
+                                style={{ fontSize: "0.75rem", padding: "0.2rem 0.4rem" }}
+                                onClick={() => removeSplitEntry(r.rowIndex, i)}
+                                disabled={r.splits.length <= 2}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                              onClick={() => addSplitEntry(r.rowIndex)}
+                            >
+                              Zeile hinzufügen
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary"
+                              style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                              onClick={() => toggleSplitMode(r.rowIndex)}
+                            >
+                              Einfach
+                            </button>
+                          </div>
+                          {r.amountCents !== null && (
+                            <div
+                              className={splitSumCents(r.splits) === -r.amountCents ? "muted" : "balance-warning"}
+                              style={{ fontSize: "0.8rem", marginTop: "0.2rem" }}
+                            >
+                              Restbetrag: {formatCents(-r.amountCents - splitSumCents(r.splits))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td>
                       {r.possibleDuplicate && r.duplicateOf && (

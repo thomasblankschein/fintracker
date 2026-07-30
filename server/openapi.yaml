@@ -806,13 +806,22 @@ components:
 
     ImportCommitRow:
       type: object
-      required: [date, amountCents, categoryAccountId]
+      required: [date, amountCents, postings]
       properties:
         date: { type: string, format: date }
         amountCents: { type: integer }
         description: { type: string }
         payeeName: { type: string, nullable: true }
-        categoryAccountId: { type: integer }
+        postings:
+          type: array
+          minItems: 1
+          description: "Gegen-Postings zum Konto der CSV (defaultAccountId) — im einfachen Fall ein Eintrag, bei einer Split-Buchung mehrere. Summe muss exakt -amountCents ergeben, sonst wird die Zeile übersprungen."
+          items:
+            type: object
+            required: [accountId, amountCents]
+            properties:
+              accountId: { type: integer }
+              amountCents: { type: integer }
 
     ImportCommitInput:
       type: object
