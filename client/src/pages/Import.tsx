@@ -503,23 +503,27 @@ export default function Import() {
                       ) : (
                         <div>
                           {r.splits.map((s, i) => (
-                            <div key={i} style={{ display: "flex", gap: "0.3rem", marginBottom: "0.3rem", alignItems: "center" }}>
+                            <div
+                              key={i}
+                              style={{ display: "flex", gap: "0.3rem", marginBottom: "0.3rem", alignItems: "center", flexWrap: "wrap" }}
+                            >
                               <AccountSelect
                                 tree={tree}
                                 value={s.accountId}
                                 onChange={(id) => updateSplitEntry(r.rowIndex, i, { accountId: id })}
                                 excludeId={defaultAccountId || undefined}
+                                style={{ flex: "1 1 9rem", minWidth: "7rem", maxWidth: "20rem" }}
                               />
                               <input
                                 value={s.amountEuro}
                                 onChange={(e) => updateSplitEntry(r.rowIndex, i, { amountEuro: e.target.value })}
                                 placeholder="Betrag"
-                                style={{ width: "5.5rem" }}
+                                style={{ width: "5.5rem", flexShrink: 0 }}
                               />
                               <button
                                 type="button"
                                 className="secondary"
-                                style={{ fontSize: "0.75rem", padding: "0.2rem 0.4rem" }}
+                                style={{ fontSize: "0.75rem", padding: "0.2rem 0.4rem", flexShrink: 0 }}
                                 onClick={() => removeSplitEntry(r.rowIndex, i)}
                                 disabled={r.splits.length <= 2}
                               >

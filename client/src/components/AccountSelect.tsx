@@ -7,15 +7,17 @@ interface Props {
   filterType?: AccountNode["type"][];
   excludeId?: number;
   placeholder?: string;
+  style?: React.CSSProperties;
 }
 
-export default function AccountSelect({ tree, value, onChange, filterType, excludeId, placeholder }: Props) {
+export default function AccountSelect({ tree, value, onChange, filterType, excludeId, placeholder, style }: Props) {
   const flat = flattenAccounts(tree).filter(
     (entry) => (filterType ? filterType.includes(entry.node.type) : true) && entry.node.id !== excludeId
   );
+  const selectedName = value !== "" ? flat.find((entry) => entry.node.id === value)?.node.name : undefined;
 
   return (
-    <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+    <select value={value} onChange={(e) => onChange(Number(e.target.value))} style={style} title={selectedName}>
       <option value="" disabled>
         {placeholder ?? "Konto wählen"}
       </option>
