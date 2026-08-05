@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS report_account_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  account_ids TEXT NOT NULL
+);

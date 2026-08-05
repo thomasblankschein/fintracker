@@ -1,6 +1,6 @@
 # SQLite-Datenmodell
 
-Das Datenmodell besteht aus bewusst nur **6 Tabellen** (5 im Kern-Schema [001_init.sql](server/src/migrations/001_init.sql), plus `import_templates` in [002_import_templates.sql](server/src/migrations/002_import_templates.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
+Das Datenmodell besteht aus bewusst nur **7 Tabellen** (5 im Kern-Schema [001_init.sql](server/src/migrations/001_init.sql), plus `import_templates` in [002_import_templates.sql](server/src/migrations/002_import_templates.sql) und `report_account_configs` in [004_report_account_configs.sql](server/src/migrations/004_report_account_configs.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
 
 ## ER-Diagramm
 
@@ -52,6 +52,11 @@ erDiagram
         text mapping "JSON: {date,amount,description?,payee?} je {index,header}"
         integer default_account_id FK "nullable"
     }
+    REPORT_ACCOUNT_CONFIGS {
+        integer id PK
+        text name "UNIQUE"
+        text account_ids "JSON-Array gewählter Konto-IDs, z. B. [2,6,3]"
+    }
 
     ACCOUNTS ||--o{ ACCOUNTS       : "parent_id (Kontenrahmen-Baum)"
     ACCOUNTS ||--o{ POSTINGS       : "account_id"
@@ -82,6 +87,9 @@ Vorlagen für Extrapolation (Prognose) und "Jetzt buchen". Fix auf **zwei** Kont
 
 ### `import_templates` — CSV-Import-Vorlagen
 Speichert Spalten-Zuordnung, Trennzeichen und Ziel-Konto für wiederkehrend gleich strukturierte CSV-Exporte (z. B. der monatliche Kreditkarten-Export derselben Bank). Das Mapping liegt als **JSON-Text** in `mapping` statt als eigene Spalten je Feld — hält die Tabelle schlank, analog zu `postings` als "flexible" Tabelle im Kernschema. Jedes gemappte Feld (`date`, `amount`, optional `description`/`payee`) trägt sowohl den Spalten-**Index** als auch den **Header-Text** zum Speicherzeitpunkt: beim Anwenden auf eine neue Datei wird zuerst per Header-Text gesucht (übersteht leicht andere Spaltenreihenfolge bei künftigen Exporten), erst bei fehlendem Treffer auf den Index zurückgefallen. `default_account_id` ist optional und wird beim Anwenden als Ziel-Konto vorausgefüllt. `skip_rows` (Default 0, seit [003_import_template_skip_rows.sql](server/src/migrations/003_import_template_skip_rows.sql)) überspringt eine feste Anzahl führender Zeilen vor Trennzeichen-Erkennung und Parsing — nötig bei Bank-Exports mit Metadaten-Zeilen vor der echten Überschrift (z. B. MLP Banking AG: Überschrift erst ab Zeile 15, also `skip_rows = 14`).
+
+### `report_account_configs` — gespeicherte Kontenauswahl für Auswertungen
+Speichert eine benannte Auswahl von Konto-IDs als **JSON-Array** in `account_ids` (analog zum flexiblen JSON-Text in `import_templates.mapping`). Genutzt von der Geldverwendungs-Auswertung (`/reports/money-usage`), um die Gruppe der liquiden Konten einmalig zusammenzustellen und später per Namen wiederzuverwenden — statt sie bei jedem Besuch neu anzuklicken. Bewusst generisch gehalten (`account_ids` ohne festen Bezug zu einem Report-Typ), damit die Tabelle bei künftigen Auswertungen mit Kontenauswahl wiederverwendbar bleibt.
 
 ## Kernentscheidung: ein Vorzeichen statt Soll/Haben
 

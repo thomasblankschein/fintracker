@@ -18,6 +18,7 @@ tags:
   - name: Reports
   - name: Import
   - name: ImportTemplates
+  - name: ReportConfigs
 
 paths:
   /info:
@@ -367,6 +368,30 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/CategoryReportRow" }
 
+  /reports/money-usage:
+    get:
+      tags: [Reports]
+      summary: Geldflussrechnung über eine wählbare Gruppe liquider Konten (Konsum / Vermögensbildung / Tilgung)
+      description: >
+        Aggregiert die Gegen-Postings (Konten außerhalb der liquiden Gruppe) aller Buchungen, die
+        mindestens ein Posting auf einem der gewählten liquiden Konten haben. Interne Umbuchungen
+        innerhalb der Gruppe fallen automatisch raus. Jedes Gegenkonto wird nach Typ + Vorzeichen
+        einer Richtung (Herkunft/Verwendung) und einem Topf zugeordnet.
+      parameters:
+        - $ref: "#/components/parameters/FromParam"
+        - $ref: "#/components/parameters/ToParam"
+        - name: accounts
+          in: query
+          required: true
+          description: "Kommagetrennte Konto-IDs der liquiden Gruppe (inkl. deren Unterkonten). Leer → leeres Ergebnis."
+          schema: { type: string, example: "2,6,3" }
+      responses:
+        "200":
+          description: Geldverwendungs-Auswertung
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoneyUsageReport" }
+
   /reports/by-payee:
     get:
       tags: [Reports]
@@ -492,6 +517,43 @@ paths:
     delete:
       tags: [ImportTemplates]
       summary: Vorlage löschen
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+
+  /report-configs:
+    get:
+      tags: [ReportConfigs]
+      summary: Gespeicherte Kontenauswahl-Konfigurationen (z. B. liquide Gruppe für Geldverwendung) auflisten
+      responses:
+        "200":
+          description: Liste der Konfigurationen
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReportAccountConfig" }
+    post:
+      tags: [ReportConfigs]
+      summary: Aktuelle Kontenauswahl als benannte Konfiguration speichern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportAccountConfigInput" }
+      responses:
+        "201":
+          description: Angelegt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /report-configs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    delete:
+      tags: [ReportConfigs]
+      summary: Konfiguration löschen
       responses:
         "200": { $ref: "#/components/responses/Ok" }
 
@@ -747,6 +809,48 @@ components:
         payeeName: { type: string }
         expenseTotalCents: { type: integer }
         incomeTotalCents: { type: integer }
+
+    MoneyUsageReport:
+      type: object
+      properties:
+        netChangeCents:
+          type: integer
+          description: "Netto-Veränderung des liquiden Bestands = Σ Herkunft − Σ Verwendung (= Summe aller Postings auf der liquiden Gruppe im Zeitraum)"
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/MoneyUsageRow" }
+
+    MoneyUsageRow:
+      type: object
+      description: "Ein Gegenkonto der liquiden Gruppe, mit Richtung und wirtschaftlichem Topf. amountCents ist immer positiv (Magnitude)."
+      properties:
+        accountId: { type: integer }
+        accountName: { type: string }
+        accountType: { type: string, enum: [asset, liability, equity, income, expense] }
+        direction: { type: string, enum: [herkunft, verwendung] }
+        bucket:
+          type: string
+          enum: [konsum, vermoegensbildung, tilgung, einnahmen, vermoegensaufloesung, kreditaufnahme, eigenkapital]
+        amountCents: { type: integer }
+
+    ReportAccountConfig:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        accountIds:
+          type: array
+          items: { type: integer }
+          description: "Gewählte Konto-IDs (z. B. die liquide Gruppe für die Geldverwendungs-Auswertung)"
+
+    ReportAccountConfigInput:
+      type: object
+      required: [name, accountIds]
+      properties:
+        name: { type: string }
+        accountIds:
+          type: array
+          items: { type: integer }
 
     ImportColumnMapping:
       type: object

@@ -88,6 +88,124 @@ reportsRouter.get("/by-category", (req, res) => {
   res.json(result);
 });
 
+/** Liefert die gewählten Konto-IDs plus alle (rekursiven) Unterkonten. Spiegelt collectSubtreeIds in transactions.ts. */
+function expandSubtrees(rootIds: number[]): Set<number> {
+  const all = db.prepare("SELECT id, parent_id FROM accounts").all() as unknown as {
+    id: number;
+    parent_id: number | null;
+  }[];
+  const byParent = new Map<number, number[]>();
+  for (const a of all) {
+    if (a.parent_id !== null) {
+      if (!byParent.has(a.parent_id)) byParent.set(a.parent_id, []);
+      byParent.get(a.parent_id)!.push(a.id);
+    }
+  }
+  const ids = new Set<number>();
+  const stack = [...rootIds];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (ids.has(current)) continue;
+    ids.add(current);
+    for (const childId of byParent.get(current) ?? []) stack.push(childId);
+  }
+  return ids;
+}
+
+type MoneyUsageDirection = "herkunft" | "verwendung";
+type MoneyUsageBucket =
+  | "konsum"
+  | "vermoegensbildung"
+  | "tilgung"
+  | "einnahmen"
+  | "vermoegensaufloesung"
+  | "kreditaufnahme"
+  | "eigenkapital";
+
+/** Ordnet ein Gegenkonto (Typ + Vorzeichen der Summe) einer Richtung + einem Topf zu. */
+function classify(type: string, total: number): { direction: MoneyUsageDirection; bucket: MoneyUsageBucket } {
+  const outflow = total > 0; // positiv = Zuwachs beim Gegenkonto = Abfluss aus den liquiden Mitteln
+  switch (type) {
+    case "expense":
+      return { direction: "verwendung", bucket: "konsum" };
+    case "income":
+      return { direction: "herkunft", bucket: "einnahmen" };
+    case "asset":
+      return outflow
+        ? { direction: "verwendung", bucket: "vermoegensbildung" }
+        : { direction: "herkunft", bucket: "vermoegensaufloesung" };
+    case "liability":
+      return outflow
+        ? { direction: "verwendung", bucket: "tilgung" }
+        : { direction: "herkunft", bucket: "kreditaufnahme" };
+    default: // equity
+      return outflow
+        ? { direction: "verwendung", bucket: "eigenkapital" }
+        : { direction: "herkunft", bucket: "eigenkapital" };
+  }
+}
+
+/**
+ * Geldflussrechnung über eine wählbare Gruppe liquider Konten L. Aggregiert die Gegen-Postings
+ * (Konten außerhalb L) aller Buchungen, die mindestens ein Posting auf L haben — interne
+ * Umbuchungen innerhalb L fallen automatisch raus. Zeigt so, wohin die Liquidität fließt
+ * (Konsum vs. Vermögensbildung vs. Tilgung), im Gegensatz zur reinen Aufwands-Auswertung.
+ */
+reportsRouter.get("/money-usage", (req, res) => {
+  const { from, to, accounts } = req.query as Record<string, string | undefined>;
+
+  const rootIds = (accounts ?? "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  if (rootIds.length === 0) {
+    return res.json({ netChangeCents: 0, rows: [] });
+  }
+
+  const liquidIds = expandSubtrees(rootIds);
+  const liquidList = [...liquidIds];
+  const liquidPlaceholders = liquidList.map(() => "?").join(",");
+  const { clause, params: dateParams } = dateFilter(from, to);
+
+  const rows = db
+    .prepare(
+      `SELECT po.account_id AS accountId, a.name AS accountName, a.type AS accountType,
+              SUM(po.amount_cents) AS total
+       FROM postings po
+       JOIN accounts a ON a.id = po.account_id
+       JOIN transactions t ON t.id = po.transaction_id
+       WHERE po.account_id NOT IN (${liquidPlaceholders})
+         AND t.id IN (SELECT transaction_id FROM postings WHERE account_id IN (${liquidPlaceholders}))
+         ${clause}
+       GROUP BY po.account_id`
+    )
+    .all(...liquidList, ...liquidList, ...dateParams) as {
+    accountId: number;
+    accountName: string;
+    accountType: string;
+    total: number;
+  }[];
+
+  let netChangeCents = 0;
+  const result = rows
+    .filter((r) => r.total !== 0)
+    .map((r) => {
+      const { direction, bucket } = classify(r.accountType, r.total);
+      const amountCents = Math.abs(r.total);
+      netChangeCents += direction === "herkunft" ? amountCents : -amountCents;
+      return {
+        accountId: r.accountId,
+        accountName: r.accountName,
+        accountType: r.accountType,
+        direction,
+        bucket,
+        amountCents,
+      };
+    });
+
+  res.json({ netChangeCents, rows: result });
+});
+
 reportsRouter.get("/by-payee", (req, res) => {
   const { from, to } = req.query as Record<string, string | undefined>;
   const { clause, params } = dateFilter(from, to);

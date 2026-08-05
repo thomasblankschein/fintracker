@@ -18,7 +18,7 @@ Guidance for Claude Code when working in this repository. Read this first — it
 
 ## Core domain model — read this before touching any booking logic
 
-Only 6 tables: `accounts`, `payees`, `transactions`, `postings`, `recurring_templates`, `import_templates`. Full detail in DATENMODELL.md. The one thing you must internalize before writing any transaction-related code:
+Only 7 tables: `accounts`, `payees`, `transactions`, `postings`, `recurring_templates`, `import_templates`, `report_account_configs` (letzteres speichert benannte Kontenauswahl-Sets für Auswertungen, z. B. die liquide Gruppe der Geldverwendungs-Analyse). Full detail in DATENMODELL.md. The one thing you must internalize before writing any transaction-related code:
 
 - **Categories are not a separate entity.** They're just `accounts` of type `income`/`expense`. The chart of accounts *is* the category list.
 - **No debit/credit columns.** Each posting has one signed `amount_cents`: **positive = money flows into the account, negative = money flows out.** A transaction is valid iff its postings sum to exactly 0 (≥2 postings).
@@ -174,9 +174,9 @@ Target environment: the owner's private Proxmox cluster, in an unprivileged LXC 
 ## Structure
 
 ```
-server/src/routes/*.ts      one file per resource (accounts, payees, transactions, recurring, forecast, reports, import, importTemplates, info)
-server/src/services/        forecast.ts (recurring→occurrence expansion), importParser.ts (CSV/date/amount parsing)
+server/src/routes/*.ts      one file per resource (accounts, payees, transactions, recurring, forecast, reports, import, importTemplates, reportConfigs, info)
+server/src/services/        forecast.ts (recurring→occurrence expansion), importParser.ts (CSV/date/amount parsing), similarity.ts (unscharfer Verwendungszweck-Vergleich für Kategorie-Vorschläge)
 server/src/migrations/      plain numbered .sql files, applied in order by db.ts on boot
 client/src/api.ts           typed fetch wrapper — the single source of truth for API shapes on the frontend
-client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1 (info is the exception — no page, just the version string in the sidebar footer)
+client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1 (Ausnahmen: info = nur Versionsstring in der Sidebar; reportConfigs = kein eigener Nav-Punkt, wird in der Auswertungen-Seite für das Speichern/Laden der liquiden Kontenauswahl genutzt)
 ```

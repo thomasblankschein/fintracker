@@ -154,6 +154,7 @@ Projiziert **nur** aktive `recurring`-Vorlagen in die Zukunft — bewusst keine 
 ```bash
 GET /api/reports/by-category?from=2026-07-01&to=2026-07-31
 GET /api/reports/by-payee?from=2026-07-01&to=2026-07-31
+GET /api/reports/money-usage?from=2026-07-01&to=2026-07-31&accounts=2,6,3
 ```
 
 Anders als bei den rohen `postings` sind die Vorzeichen hier bereits **nutzerfreundlich gedreht**: `by-category` liefert für `income`-Konten positive `totalCents` (statt der intern negativen Buchungssumme); `by-payee` liefert getrennt `expenseTotalCents` und `incomeTotalCents`, beide als positive Beträge.
@@ -169,6 +170,27 @@ Anders als bei den rohen `postings` sind die Vorzeichen hier bereits **nutzerfre
 ```
 
 `depth` zählt ab 1 (direktes Kind von "Aufwendungen"/"Erträge"); der Wurzelknoten selbst wird nicht ausgewiesen. **Wichtig:** Zeilen verschiedener Tiefe nicht einfach aufsummieren — "Freizeit & Hobby" (45000) enthält "Urlaube & Trips" (30000) bereits vollständig. Für eine überschneidungsfreie Gesamtsumme (z. B. für ein Balkendiagramm) nur `depth === 1` verwenden.
+
+**`money-usage` ist eine Geldflussrechnung, keine Erfolgsrechnung.** Während `by-category` nur den echten Verbrauch (`Aufwendungen`) zeigt, beantwortet `money-usage` die Frage „wohin fließt die Liquidität?" — inklusive Vermögensbildung (Sparen/Vorsorge) und Schuldentilgung, die kein Verbrauch sind, aber Liquidität binden. Der Parameter `accounts` (kommagetrennte IDs, inkl. Unterkonten) definiert die **Gruppe liquider Konten** L. Betrachtet werden alle Buchungen mit mindestens einem Posting auf L; aggregiert werden deren **Gegen-Postings** (Konten außerhalb L) je Gegenkonto. Interne Umbuchungen innerhalb L (z. B. Girokonto→Kreditkarte-Ausgleich) haben keine Gegen-Postings außerhalb L und fallen automatisch raus — keine Doppelzählung. Jedes Gegenkonto wird nach `type` + Vorzeichen der aufsummierten Postings klassifiziert:
+
+| Gegenkonto-Typ | Summe > 0 (Abfluss) | Summe < 0 (Zufluss) |
+|---|---|---|
+| `expense` | Konsum | — |
+| `income` | — | Einnahmen |
+| `asset` (∉ L) | Vermögensbildung | Vermögensauflösung |
+| `liability` | Schuldentilgung | Kreditaufnahme |
+
+`amountCents` ist immer positiv (Magnitude); `direction` ist `herkunft` (Zufluss) oder `verwendung` (Abfluss). `netChangeCents` = Σ Herkunft − Σ Verwendung und entspricht der tatsächlichen Saldoänderung der liquiden Gruppe im Zeitraum. Eine Split-Buchung (z. B. Darlehensrate = Zins + Tilgung) landet anteilig in mehreren Töpfen, weil jedes Gegen-Posting einzeln zählt.
+
+**Kontenauswahl speichern/laden** (`/report-configs`) — damit die liquide Gruppe nicht bei jedem Besuch neu zusammengeklickt werden muss:
+
+```bash
+GET /api/report-configs                       # [{ id, name, accountIds: [2,6,3] }, …]
+POST /api/report-configs                       # {name, accountIds: number[]}
+DELETE /api/report-configs/{id}
+```
+
+Bewusst generisch (`accountIds` ohne festen Report-Bezug), damit die Tabelle für künftige Auswertungen mit Kontenauswahl wiederverwendbar bleibt. `name` ist `UNIQUE` (doppelter Name → 400).
 
 ## 8. CSV-Import (`/import/*`)
 

@@ -124,6 +124,30 @@ export interface PayeeReportRow {
   incomeTotalCents: number;
 }
 
+export type MoneyUsageDirection = "herkunft" | "verwendung";
+export type MoneyUsageBucket =
+  | "konsum"
+  | "vermoegensbildung"
+  | "tilgung"
+  | "einnahmen"
+  | "vermoegensaufloesung"
+  | "kreditaufnahme"
+  | "eigenkapital";
+
+export interface MoneyUsageRow {
+  accountId: number;
+  accountName: string;
+  accountType: string;
+  direction: MoneyUsageDirection;
+  bucket: MoneyUsageBucket;
+  amountCents: number;
+}
+
+export interface MoneyUsageReport {
+  netChangeCents: number;
+  rows: MoneyUsageRow[];
+}
+
 export interface ImportFieldMapping {
   index: number;
   header: string | null;
@@ -144,6 +168,12 @@ export interface ImportTemplate {
   skipRows: number;
   mapping: ImportTemplateMapping;
   defaultAccountId: number | null;
+}
+
+export interface ReportAccountConfig {
+  id: number;
+  name: string;
+  accountIds: number[];
 }
 
 export const api = {
@@ -222,6 +252,13 @@ export const api = {
     if (to) params.set("to", to);
     return request<PayeeReportRow[]>(`/reports/by-payee?${params.toString()}`);
   },
+  getMoneyUsage: (accountIds: number[], from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    params.set("accounts", accountIds.join(","));
+    return request<MoneyUsageReport>(`/reports/money-usage?${params.toString()}`);
+  },
 
   importParse: (csvText: string, skipRows = 0) => request<{ delimiter: string; headers: string[]; sampleRows: string[][]; rowCount: number }>(
     "/import/parse",
@@ -273,6 +310,11 @@ export const api = {
     defaultAccountId?: number | null;
   }) => request<{ id: number }>("/import-templates", { method: "POST", body: JSON.stringify(data) }),
   deleteImportTemplate: (id: number) => request<{ ok: true }>(`/import-templates/${id}`, { method: "DELETE" }),
+
+  getReportConfigs: () => request<ReportAccountConfig[]>("/report-configs"),
+  createReportConfig: (data: { name: string; accountIds: number[] }) =>
+    request<{ id: number }>("/report-configs", { method: "POST", body: JSON.stringify(data) }),
+  deleteReportConfig: (id: number) => request<{ ok: true }>(`/report-configs/${id}`, { method: "DELETE" }),
 };
 
 export function formatCents(cents: number): string {
