@@ -54,6 +54,14 @@ export default function Accounts() {
     }
   };
 
+  const startCreateChild = (node: AccountNode) => {
+    setType(node.type);
+    setParentId(node.id);
+    setName("");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const move = async (node: AccountNode, newParentId: number | null) => {
     try {
       await api.updateAccount(node.id, { parentId: newParentId });
@@ -202,6 +210,7 @@ export default function Accounts() {
                 onDelete={remove}
                 onRename={rename}
                 onMove={move}
+                onAddChild={startCreateChild}
               />
             ))
           )}
@@ -231,6 +240,7 @@ function AccountRow({
   onDelete,
   onRename,
   onMove,
+  onAddChild,
 }: {
   node: AccountNode;
   depth: number;
@@ -239,6 +249,7 @@ function AccountRow({
   onDelete: (n: AccountNode) => void;
   onRename: (n: AccountNode, newName: string) => void;
   onMove: (n: AccountNode, newParentId: number | null) => void;
+  onAddChild: (n: AccountNode) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.name);
@@ -280,27 +291,30 @@ function AccountRow({
             }}
           />
         ) : moving ? (
-          <select
-            autoFocus
-            value={node.parentId ?? ""}
-            onChange={(e) => {
-              const value = e.target.value;
-              onMove(node, value === "" ? null : Number(value));
-              setMoving(false);
-            }}
-            onBlur={() => setMoving(false)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setMoving(false);
-            }}
-          >
-            <option value="">— kein (Wurzel) —</option>
-            {moveCandidates.map(({ node: candidate, depth: candidateDepth }) => (
-              <option key={candidate.id} value={candidate.id}>
-                {"  ".repeat(candidateDepth)}
-                {candidate.name}
-              </option>
-            ))}
-          </select>
+          <span style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+            <span className="muted">{node.name} →</span>
+            <select
+              autoFocus
+              value={node.parentId ?? ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                onMove(node, value === "" ? null : Number(value));
+                setMoving(false);
+              }}
+              onBlur={() => setMoving(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setMoving(false);
+              }}
+            >
+              <option value="">— kein (Wurzel) —</option>
+              {moveCandidates.map(({ node: candidate, depth: candidateDepth }) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {"  ".repeat(candidateDepth)}
+                  {candidate.name}
+                </option>
+              ))}
+            </select>
+          </span>
         ) : (
           <span style={{ opacity: node.isActive ? 1 : 0.5 }}>
             {node.name}
@@ -313,6 +327,7 @@ function AccountRow({
             isActive={node.isActive}
             onRename={startEdit}
             onMove={() => setMoving(true)}
+            onAddChild={() => onAddChild(node)}
             onViewTransactions={() => navigate(`/buchungen?account=${node.id}`)}
             onToggle={() => onToggle(node)}
             onDelete={() => onDelete(node)}
@@ -329,6 +344,7 @@ function AccountRow({
           onDelete={onDelete}
           onRename={onRename}
           onMove={onMove}
+          onAddChild={onAddChild}
         />
       ))}
     </div>
@@ -339,6 +355,7 @@ function AccountMenu({
   isActive,
   onRename,
   onMove,
+  onAddChild,
   onViewTransactions,
   onToggle,
   onDelete,
@@ -346,6 +363,7 @@ function AccountMenu({
   isActive: boolean;
   onRename: () => void;
   onMove: () => void;
+  onAddChild: () => void;
   onViewTransactions: () => void;
   onToggle: () => void;
   onDelete: () => void;
@@ -379,6 +397,9 @@ function AccountMenu({
           </button>
           <button type="button" onClick={() => run(onMove)}>
             Verschieben
+          </button>
+          <button type="button" onClick={() => run(onAddChild)}>
+            Untergeordnetes Konto anlegen
           </button>
           <button type="button" onClick={() => run(onViewTransactions)}>
             Buchungen ansehen
