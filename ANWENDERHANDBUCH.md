@@ -74,7 +74,9 @@ Die Navigation links führt zu allen sieben Bereichen der App. Sie ist auf jeder
 ① **Kontenbaum** — beliebig tief verschachtelbar; jedes Konto zeigt seinen Saldo *inklusive* aller Unterkonten (hier sichtbar an der dreistufigen Kette Freizeit & Hobby → Urlaube & Trips → Wochenendreisen).
 ② **Konto anlegen** — neues Konto oder neue Kategorie hinzufügen.
 ③ **Exportieren/Importieren** — den kompletten Kontenrahmen als JSON-Datei sichern oder (per Merge, ohne bestehende Konten zu überschreiben) wieder einspielen.
-④ **"⋯"-Menü** — pro Konto: Umbenennen (Inline-Bearbeitung direkt in der Zeile), Verschieben (übergeordnetes Konto ändern — die Auswahlliste zeigt nur Konten desselben Kontotyps und schließt das Konto selbst sowie seine eigenen Unterkonten aus, damit keine Zyklen entstehen), Buchungen ansehen (springt gefiltert in die Buchungsübersicht, inkl. aller Unterkonten), Deaktivieren/Aktivieren, Löschen (nur möglich, wenn das Konto weder Buchungen noch Unterkonten hat — sonst stattdessen deaktivieren).
+④ **"⋯"-Menü** (rechts neben jedem Konto, siehe Ausschnitt) — pro Konto: Umbenennen (Inline-Bearbeitung direkt in der Zeile), Verschieben (übergeordnetes Konto ändern — die Auswahlliste zeigt nur Konten desselben Kontotyps und schließt das Konto selbst sowie seine eigenen Unterkonten aus, damit keine Zyklen entstehen), Untergeordnetes Konto anlegen (öffnet das Anlegen-Formular oben auf der Seite mit bereits vorausgefülltem Kontotyp und übergeordnetem Konto), Buchungen ansehen (springt gefiltert in die Buchungsübersicht, inkl. aller Unterkonten), Deaktivieren/Aktivieren, Löschen (nur möglich, wenn das Konto weder Buchungen noch Unterkonten hat — sonst stattdessen deaktivieren).
+
+![Konto-Kontextmenü](docs/screenshots/konten-menu.png)
 
 ### 3.3 Buchungen
 
@@ -108,6 +110,12 @@ Ein dreistufiger Assistent: ① Datei auswählen, dann Spalten zuordnen und Buch
 ![Auswertungen](docs/screenshots/auswertungen-uebersicht.png)
 
 ① **Gesamtsummen** für den gewählten Zeitraum. ② **Ausgaben nach Kategorie** — Balkendiagramm der obersten Kategorie-Ebene; jeder Balken enthält bereits alle Unterkategorien (mehr dazu in [Beispiel 7](#beispiel-7-mehrstufige-kategorien-auswerten)).
+
+Weiter unten auf derselben Seite gibt es zusätzlich die Auswertung **„Geldverwendung — Wohin fließt mein Geld?"**. Sie beantwortet eine andere Frage als die Kategorie-Auswertung: Nicht „was habe ich verbraucht?", sondern „wohin ist die Liquidität von meinen Alltagskonten geflossen?".
+
+![Geldverwendung](docs/screenshots/geldverwendung.png)
+
+① Im **Kontenbaum** (nur Aktiva und Passiva werden angezeigt) markiert man per Häkchen seine **liquiden Konten** (z. B. Girokonto, Kreditkarte, Bargeld); ein markiertes Konto schließt seine Unterkonten automatisch mit ein. ② Die Auswahl wird gemerkt und lässt sich zusätzlich unter einem Namen als **Konfiguration speichern** und später über ein Dropdown wieder **laden** — praktisch, um zwischen Betrachtungen zu wechseln (z. B. „nur Girokonto" vs. „alle Alltagskonten"). ③ Die **Mittelherkunft** (Einnahmen usw.) und ④ die **Mittelverwendung**, aufgeteilt in drei Töpfe: **Konsum** (echte Ausgaben), **Vermögensbildung** (Einzahlungen in Sparen/Vorsorge/Depot) und **Schuldentilgung** (Kreditraten). Die beiden letzten verbrauchen das Geld nicht, sondern schichten es nur um bzw. bauen Verbindlichkeiten ab und erhöhen so das Netto-Vermögen. ⑤ Ganz unten die **Netto-Veränderung des liquiden Bestands** (Zuflüsse − Abflüsse). Umbuchungen *zwischen* zwei liquiden Konten (z. B. der Kreditkarten-Ausgleich vom Girokonto) werden automatisch herausgerechnet.
 
 ---
 
