@@ -155,12 +155,17 @@ th, td {
   border-bottom: 1px solid var(--border);
 }
 
+td {
+  overflow-wrap: anywhere;
+}
+
 th {
   color: var(--muted);
   font-weight: 600;
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 tr:hover td {
@@ -185,6 +190,7 @@ button, .btn {
   padding: 0.5rem 1rem;
   font-size: 0.9rem;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 button.secondary, .btn.secondary {

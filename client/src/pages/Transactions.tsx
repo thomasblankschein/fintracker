@@ -381,7 +381,7 @@ export default function Transactions() {
             <tbody>
               {transactions.map((t) => (
                 <tr key={t.id}>
-                  <td>{t.date}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{t.date}</td>
                   <td>{t.payeeName ?? "—"}</td>
                   <td>{t.description ?? "—"}</td>
                   <td>
