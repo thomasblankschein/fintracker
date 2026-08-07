@@ -14,6 +14,37 @@ interface ColumnMapping {
   payee?: number;
 }
 
+type SkipPatternField = "description" | "payee" | "both";
+
+interface SkipPattern {
+  pattern: string;
+  field: SkipPatternField;
+}
+
+/**
+ * Ad-hoc-Regex während des Tippens in Schritt 2 wird hier defensiv statt hart validiert
+ * (anders als beim Speichern einer Vorlage in importTemplates.ts) — eine ungültige Regex
+ * darf die Vorschau nicht zum Absturz bringen, sie matcht dann einfach nie.
+ */
+function matchesSkipPattern(
+  description: string,
+  payeeName: string | null,
+  patterns: SkipPattern[] | undefined
+): string | null {
+  if (!patterns) return null;
+  for (const p of patterns) {
+    let regex: RegExp;
+    try {
+      regex = new RegExp(p.pattern, "i");
+    } catch {
+      continue;
+    }
+    if ((p.field === "description" || p.field === "both") && regex.test(description)) return p.pattern;
+    if ((p.field === "payee" || p.field === "both") && payeeName && regex.test(payeeName)) return p.pattern;
+  }
+  return null;
+}
+
 function parseIsoDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -151,13 +182,14 @@ function suggestCategoryBySimilarBooking(
 }
 
 importRouter.post("/preview", (req, res) => {
-  const { csvText, delimiter, mapping, hasHeader, defaultAccountId, skipRows } = req.body as {
+  const { csvText, delimiter, mapping, hasHeader, defaultAccountId, skipRows, skipPatterns } = req.body as {
     csvText: string;
     delimiter: string;
     mapping: ColumnMapping;
     hasHeader: boolean;
     defaultAccountId: number;
     skipRows?: number;
+    skipPatterns?: SkipPattern[];
   };
   if (!csvText || !mapping || mapping.date === undefined || mapping.amount === undefined) {
     return res.status(400).json({ error: "csvText und mapping (date, amount) sind erforderlich." });
@@ -177,6 +209,28 @@ importRouter.post("/preview", (req, res) => {
 
     const date = parseDateToIso(rawDate);
     const amountCents = parseAmountToCents(rawAmount);
+    const ignoredByPattern = matchesSkipPattern(description, payeeName || null, skipPatterns);
+
+    if (ignoredByPattern) {
+      return {
+        rowIndex: index,
+        date,
+        rawDate,
+        amountCents,
+        description,
+        payeeName: payeeName || null,
+        suggestedCategoryAccountId: null,
+        suggestedCategoryAccountName: null,
+        suggestionSource: null,
+        similarBookingOf: null,
+        possibleDuplicate: false,
+        duplicateOf: null,
+        ignored: true,
+        ignoredByPattern,
+        valid: date !== null && amountCents !== null && amountCents !== 0,
+      };
+    }
+
     const paySuggestion = suggestCategoryForPayee(payeeName);
     const similarSuggestion =
       !paySuggestion && amountCents !== null
@@ -199,6 +253,8 @@ importRouter.post("/preview", (req, res) => {
         : null,
       possibleDuplicate: duplicateOf !== null,
       duplicateOf,
+      ignored: false,
+      ignoredByPattern: null,
       valid: date !== null && amountCents !== null && amountCents !== 0,
     };
   });

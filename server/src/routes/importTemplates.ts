@@ -15,6 +15,34 @@ interface TemplateMapping {
   payee?: FieldMapping;
 }
 
+type SkipPatternField = "description" | "payee" | "both";
+
+interface SkipPattern {
+  pattern: string;
+  field: SkipPatternField;
+}
+
+const SKIP_PATTERN_FIELDS: SkipPatternField[] = ["description", "payee", "both"];
+
+function validateSkipPatterns(skipPatterns: unknown): string | null {
+  if (skipPatterns === undefined) return null;
+  if (!Array.isArray(skipPatterns)) return "skipPatterns muss ein Array sein.";
+  for (const p of skipPatterns) {
+    if (!p || typeof p.pattern !== "string" || !p.pattern.trim()) {
+      return "Jedes Suchmuster benötigt einen nicht-leeren Regex-Text.";
+    }
+    if (!SKIP_PATTERN_FIELDS.includes(p.field)) {
+      return `Ungültiges Feld für Suchmuster: ${p.field}`;
+    }
+    try {
+      new RegExp(p.pattern);
+    } catch {
+      return `Ungültiges Suchmuster (Regex): ${p.pattern}`;
+    }
+  }
+  return null;
+}
+
 function serialize(row: any) {
   return {
     id: row.id,
@@ -24,6 +52,7 @@ function serialize(row: any) {
     skipRows: row.skip_rows ?? 0,
     mapping: JSON.parse(row.mapping) as TemplateMapping,
     defaultAccountId: row.default_account_id,
+    skipPatterns: JSON.parse(row.skip_patterns ?? "[]") as SkipPattern[],
   };
 }
 
@@ -33,19 +62,29 @@ importTemplatesRouter.get("/", (req, res) => {
 });
 
 importTemplatesRouter.post("/", (req, res) => {
-  const { name, delimiter, hasHeader, mapping, defaultAccountId, skipRows } = req.body ?? {};
+  const { name, delimiter, hasHeader, mapping, defaultAccountId, skipRows, skipPatterns } = req.body ?? {};
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "Name ist erforderlich." });
   }
   if (!delimiter || !mapping || mapping.date === undefined || mapping.amount === undefined) {
     return res.status(400).json({ error: "delimiter und mapping (date, amount) sind erforderlich." });
   }
+  const skipPatternsError = validateSkipPatterns(skipPatterns);
+  if (skipPatternsError) return res.status(400).json({ error: skipPatternsError });
   try {
     const result = db
       .prepare(
-        "INSERT INTO import_templates (name, delimiter, has_header, skip_rows, mapping, default_account_id) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO import_templates (name, delimiter, has_header, skip_rows, mapping, default_account_id, skip_patterns) VALUES (?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(name.trim(), delimiter, hasHeader ? 1 : 0, Number(skipRows) || 0, JSON.stringify(mapping), defaultAccountId ?? null);
+      .run(
+        name.trim(),
+        delimiter,
+        hasHeader ? 1 : 0,
+        Number(skipRows) || 0,
+        JSON.stringify(mapping),
+        defaultAccountId ?? null,
+        JSON.stringify(skipPatterns ?? [])
+      );
     res.status(201).json({ id: result.lastInsertRowid });
   } catch (e: any) {
     if (String(e.message).includes("UNIQUE")) {

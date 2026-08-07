@@ -160,6 +160,13 @@ export interface ImportTemplateMapping {
   payee?: ImportFieldMapping;
 }
 
+export type ImportSkipPatternField = "description" | "payee" | "both";
+
+export interface ImportSkipPattern {
+  pattern: string;
+  field: ImportSkipPatternField;
+}
+
 export interface ImportTemplate {
   id: number;
   name: string;
@@ -168,6 +175,7 @@ export interface ImportTemplate {
   skipRows: number;
   mapping: ImportTemplateMapping;
   defaultAccountId: number | null;
+  skipPatterns: ImportSkipPattern[];
 }
 
 export interface ReportAccountConfig {
@@ -271,6 +279,7 @@ export const api = {
     mapping: { date: number; amount: number; description?: number; payee?: number };
     defaultAccountId: number;
     skipRows?: number;
+    skipPatterns?: ImportSkipPattern[];
   }) =>
     request<{
       rows: {
@@ -286,6 +295,8 @@ export const api = {
         similarBookingOf: { transactionId: number; date: string; description: string | null } | null;
         possibleDuplicate: boolean;
         duplicateOf: { transactionId: number; date: string; description: string | null } | null;
+        ignored: boolean;
+        ignoredByPattern: string | null;
         valid: boolean;
       }[];
     }>("/import/preview", { method: "POST", body: JSON.stringify(data) }),
@@ -308,6 +319,7 @@ export const api = {
     skipRows: number;
     mapping: ImportTemplateMapping;
     defaultAccountId?: number | null;
+    skipPatterns: ImportSkipPattern[];
   }) => request<{ id: number }>("/import-templates", { method: "POST", body: JSON.stringify(data) }),
   deleteImportTemplate: (id: number) => request<{ ok: true }>(`/import-templates/${id}`, { method: "DELETE" }),
 

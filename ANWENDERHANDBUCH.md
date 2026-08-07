@@ -107,6 +107,8 @@ Die Navigation links führt zu allen sieben Bereichen der App. Sie ist auf jeder
 
 Ein dreistufiger Assistent: ① Datei auswählen, dann Spalten zuordnen und Buchungen kategorisieren — im Detail in [Beispiel 5](#beispiel-5-kontoauszug-mit-vorlage-importieren) und [Beispiel 6](#beispiel-6-kreditkarten-ausgleich-ohne-doppelbuchung).
 
+**Zeilen ignorieren:** In Schritt 2 lassen sich unter "Zeilen ignorieren (optional)" beliebig viele Suchmuster (Regex, Groß-/Kleinschreibung egal) auf Beschreibung und/oder Zahlungsempfänger anlegen. Passende Zeilen werden in Schritt 3 als **"Ignoriert"** markiert (gedimmt, ohne Kategorie-Auswahl) und nie importiert — Suchmuster lassen sich zusammen mit der übrigen Spaltenzuordnung als Vorlage speichern. Praxisfall: Eine Bargeldauszahlung per Kreditkarte erscheint auf der Kreditkartenabrechnung sofort, wird aber laut Girokontoauszug oft erst 10–15 Tage später tatsächlich abgebucht — zu weit auseinander für die automatische Doubletten-Erkennung (die nur innerhalb desselben Kontos vergleicht). Mit einem Suchmuster (z. B. auf den Buchungstext der Bank für Kartenauszahlungen) lässt sich diese Zeile beim Import der Kreditkartenabrechnung gezielt überspringen und stattdessen erst beim späteren Import des Girokontoauszugs — mit dem dann korrekten Datum — buchen.
+
 ### 3.7 Auswertungen
 
 ![Auswertungen](docs/screenshots/auswertungen-uebersicht.png)

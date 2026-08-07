@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, AccountNode, ImportFieldMapping, ImportTemplate, ImportTemplateMapping, flattenAccounts, formatCents, parseEuroToCents } from "../api";
+import { api, AccountNode, ImportFieldMapping, ImportSkipPattern, ImportSkipPatternField, ImportTemplate, ImportTemplateMapping, flattenAccounts, formatCents, parseEuroToCents } from "../api";
 import AccountSelect from "../components/AccountSelect";
 
 interface SplitEntry {
@@ -21,6 +21,8 @@ interface PreviewRow {
   similarBookingOf: { transactionId: number; date: string; description: string | null } | null;
   possibleDuplicate: boolean;
   duplicateOf: { transactionId: number; date: string; description: string | null } | null;
+  ignored: boolean;
+  ignoredByPattern: string | null;
   valid: boolean;
 }
 
@@ -29,6 +31,7 @@ function splitSumCents(splits: SplitEntry[]): number {
 }
 
 function rowIsValid(r: PreviewRow): boolean {
+  if (r.ignored) return false;
   if (!r.valid || !r.date || r.amountCents === null) return false;
   if (r.splitMode) {
     if (r.splits.length === 0 || r.splits.some((s) => s.accountId === "" || s.amountEuro.trim() === "")) return false;
@@ -55,6 +58,7 @@ export default function Import() {
   const [payeeCol, setPayeeCol] = useState<number | "">("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | "">("");
   const [templateName, setTemplateName] = useState("");
+  const [skipPatterns, setSkipPatterns] = useState<ImportSkipPattern[]>([]);
 
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [defaultAccountId, setDefaultAccountId] = useState<number | "">("");
@@ -96,6 +100,7 @@ export default function Import() {
     setDescriptionCol(resolve(template.mapping.description));
     setPayeeCol(resolve(template.mapping.payee));
     if (template.defaultAccountId) setDefaultAccountId(template.defaultAccountId);
+    setSkipPatterns(template.skipPatterns);
   };
 
   const onSelectTemplate = async (id: number) => {
@@ -131,6 +136,18 @@ export default function Import() {
     if (selectedTemplateId === id) setSelectedTemplateId("");
   };
 
+  const addSkipPattern = () => {
+    setSkipPatterns((ps) => [...ps, { pattern: "", field: "both" }]);
+  };
+
+  const updateSkipPattern = (index: number, patch: Partial<ImportSkipPattern>) => {
+    setSkipPatterns((ps) => ps.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+  };
+
+  const removeSkipPattern = (index: number) => {
+    setSkipPatterns((ps) => ps.filter((_, i) => i !== index));
+  };
+
   const goPreview = async () => {
     if (dateCol === "" || amountCol === "") {
       setError("Datum- und Betrag-Spalte sind erforderlich.");
@@ -144,7 +161,8 @@ export default function Import() {
       const mapping: any = { date: dateCol, amount: amountCol };
       if (descriptionCol !== "") mapping.description = descriptionCol;
       if (payeeCol !== "") mapping.payee = payeeCol;
-      const res = await api.importPreview({ csvText, delimiter, hasHeader, mapping, defaultAccountId, skipRows });
+      const activeSkipPatterns = skipPatterns.filter((p) => p.pattern.trim() !== "");
+      const res = await api.importPreview({ csvText, delimiter, hasHeader, mapping, defaultAccountId, skipRows, skipPatterns: activeSkipPatterns });
       setRows(
         res.rows.map((r) => ({
           ...r,
@@ -263,6 +281,7 @@ export default function Import() {
         skipRows,
         mapping,
         defaultAccountId: defaultAccountId || null,
+        skipPatterns: skipPatterns.filter((p) => p.pattern.trim() !== ""),
       });
       setTemplateName("");
       setTemplates(await api.getImportTemplates());
@@ -286,6 +305,7 @@ export default function Import() {
     setDefaultAccountId("");
     setSelectedTemplateId("");
     setTemplateName("");
+    setSkipPatterns([]);
   };
 
   const columnOptions = headers.map((h, i) => ({ index: i, label: hasHeader ? h : `Spalte ${i + 1}` }));
@@ -430,6 +450,47 @@ export default function Import() {
             </label>
           </div>
 
+          <div className="form-row" style={{ alignItems: "center" }}>
+            <strong>Zeilen ignorieren (optional)</strong>
+            <button type="button" className="secondary" onClick={addSkipPattern}>
+              Muster hinzufügen
+            </button>
+          </div>
+          <p className="muted" style={{ marginTop: "-0.5rem" }}>
+            Zeilen, deren Beschreibung und/oder Zahlungsempfänger auf ein Suchmuster (Regex, Groß-/Kleinschreibung wird ignoriert) passen, werden in der Vorschau als „Ignoriert" markiert und nie importiert. Praktisch z. B. für Bargeldauszahlungen, die auf der Kreditkartenabrechnung sofort erscheinen, aber erst Tage später auf dem Girokonto tatsächlich abgebucht werden — dort dann einmalig buchen, hier ignorieren.
+          </p>
+          {skipPatterns.map((p, i) => (
+            <div className="form-row" key={i}>
+              <label>
+                Suchmuster (Regex)
+                <input
+                  value={p.pattern}
+                  onChange={(e) => updateSkipPattern(i, { pattern: e.target.value })}
+                  placeholder="z. B. ^BK \d+"
+                />
+              </label>
+              <label>
+                Feld
+                <select
+                  value={p.field}
+                  onChange={(e) => updateSkipPattern(i, { field: e.target.value as ImportSkipPatternField })}
+                >
+                  <option value="both">Beschreibung oder Zahlungsempfänger</option>
+                  <option value="description">Beschreibung</option>
+                  <option value="payee">Zahlungsempfänger</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="secondary"
+                style={{ alignSelf: "end" }}
+                onClick={() => removeSkipPattern(i)}
+              >
+                Entfernen
+              </button>
+            </div>
+          ))}
+
           <div className="form-row">
             <label>
               Als Vorlage speichern
@@ -478,22 +539,27 @@ export default function Import() {
                   <tr
                     key={r.rowIndex}
                     style={{
-                      opacity: r.valid ? 1 : 0.4,
+                      opacity: r.ignored || !r.valid ? 0.4 : 1,
                       background: r.possibleDuplicate ? "rgba(220,38,38,0.07)" : undefined,
                     }}
                   >
                     <td>{r.date ?? `ungültig: ${r.rawDate}`}</td>
                     <td>{r.amountCents !== null ? formatCents(r.amountCents) : "ungültig"}</td>
                     <td style={{ maxWidth: "22rem" }}>
-                      <input
+                      <textarea
                         value={r.description}
                         onChange={(e) => updateRowDescription(r.rowIndex, e.target.value)}
-                        style={{ width: "100%" }}
+                        rows={2}
+                        style={{ width: "100%", resize: "vertical", fontFamily: "inherit", fontSize: "inherit" }}
                       />
                     </td>
                     <td>{r.payeeName ?? "—"}</td>
                     <td>
-                      {!r.splitMode ? (
+                      {r.ignored ? (
+                        <span className="pill" title={`Übersprungen wegen Muster: ${r.ignoredByPattern}`}>
+                          Ignoriert
+                        </span>
+                      ) : !r.splitMode ? (
                         <>
                           <AccountSelect
                             tree={tree}

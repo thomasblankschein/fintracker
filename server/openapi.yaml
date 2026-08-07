@@ -874,6 +874,20 @@ components:
           type: integer
           default: 0
           description: "Anzahl führender Zeilen, die vor dem Parsing übersprungen werden — muss zum Wert aus /import/parse passen"
+        skipPatterns:
+          type: array
+          items: { $ref: "#/components/schemas/ImportSkipPattern" }
+          description: "Zeilen, deren Beschreibung/Zahlungsempfänger auf eines dieser Muster passt, werden nicht vorgeschlagen (ignored=true) und nie importiert. Ungültige Regex werden hier defensiv ignoriert statt einen Fehler zu werfen."
+
+    ImportSkipPattern:
+      type: object
+      required: [pattern, field]
+      properties:
+        pattern: { type: string, description: "Regex, Groß-/Kleinschreibung wird beim Abgleich ignoriert" }
+        field:
+          type: string
+          enum: [description, payee, both]
+          description: "'both' = Treffer, wenn das Muster in Beschreibung ODER Zahlungsempfänger matcht"
 
     ImportDuplicateMatch:
       type: object
@@ -906,6 +920,8 @@ components:
         duplicateOf:
           allOf: [{ $ref: "#/components/schemas/ImportDuplicateMatch" }]
           nullable: true
+        ignored: { type: boolean, description: "true, wenn die Zeile auf ein skipPattern passt — wird nie importiert, Kategorie-Vorschläge/Doubletten-Prüfung werden für diese Zeile nicht berechnet" }
+        ignoredByPattern: { type: string, nullable: true, description: "Das zuerst treffende Suchmuster, falls ignored=true" }
         valid: { type: boolean }
 
     ImportCommitRow:
@@ -962,6 +978,9 @@ components:
         skipRows: { type: integer, description: "Anzahl führender Zeilen, die vor dem Parsing übersprungen werden" }
         mapping: { $ref: "#/components/schemas/ImportTemplateMapping" }
         defaultAccountId: { type: integer, nullable: true }
+        skipPatterns:
+          type: array
+          items: { $ref: "#/components/schemas/ImportSkipPattern" }
 
     ImportTemplateInput:
       type: object
@@ -973,3 +992,8 @@ components:
         skipRows: { type: integer, default: 0, description: "Anzahl führender Zeilen, die vor dem Parsing übersprungen werden" }
         mapping: { $ref: "#/components/schemas/ImportTemplateMapping" }
         defaultAccountId: { type: integer, nullable: true }
+        skipPatterns:
+          type: array
+          default: []
+          items: { $ref: "#/components/schemas/ImportSkipPattern" }
+          description: "Jedes pattern muss ein gültiger Regex sein (wird beim Speichern serverseitig geprüft, 400 bei Fehler)"
