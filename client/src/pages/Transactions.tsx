@@ -8,6 +8,50 @@ interface SplitRow {
   amountEuro: string;
 }
 
+function collectSubtreeIds(rootId: number, flatAccounts: { node: AccountNode }[]): number[] {
+  const byParent = new Map<number, number[]>();
+  for (const { node } of flatAccounts) {
+    if (node.parentId !== null) {
+      if (!byParent.has(node.parentId)) byParent.set(node.parentId, []);
+      byParent.get(node.parentId)!.push(node.id);
+    }
+  }
+  const ids = [rootId];
+  const stack = [rootId];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    for (const childId of byParent.get(current) ?? []) {
+      ids.push(childId);
+      stack.push(childId);
+    }
+  }
+  return ids;
+}
+
+function formatCentsPlain(cents: number): string {
+  const sign = cents < 0 ? "-" : "";
+  const abs = Math.abs(cents);
+  return `${sign}${Math.floor(abs / 100)},${String(abs % 100).padStart(2, "0")}`;
+}
+
+function csvField(value: string): string {
+  if (/[;"\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[äáàâ]/g, "a")
+    .replace(/[öóòô]/g, "o")
+    .replace(/[üúùû]/g, "u")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -125,6 +169,32 @@ export default function Transactions() {
     }
   };
 
+  const exportCsv = () => {
+    if (!filterAccount) return;
+    const accountIds = collectSubtreeIds(Number(filterAccount), flatAccounts);
+    const rows = transactions.map((t) => {
+      const own = t.postings.filter((p) => accountIds.includes(p.accountId));
+      const counterparts = t.postings.filter((p) => !accountIds.includes(p.accountId));
+      const ownAmount = own.reduce((sum, p) => sum + p.amountCents, 0);
+      const counterpartsText = counterparts
+        .map((p) => `${p.accountName} ${formatCentsPlain(p.amountCents)}`)
+        .join("; ");
+      return [t.date, t.payeeName ?? "", t.description ?? "", formatCentsPlain(ownAmount), counterpartsText];
+    });
+    const header = ["Datum", "Zahlungsempfänger", "Beschreibung", "Betrag", "Gegenkonto"];
+    const csv = [header, ...rows].map((r) => r.map(csvField).join(";")).join("\n");
+    const accountName = flatAccounts.find((a) => a.node.id === Number(filterAccount))?.node.name ?? "konto";
+    const namePart = slugify(accountName);
+    const rangePart = filterFrom || filterTo ? `_${filterFrom || "anfang"}_${filterTo || "heute"}` : "";
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `buchungen_${namePart}${rangePart}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const remove = async (id: number) => {
     await api.deleteTransaction(id);
     load();
@@ -192,11 +262,21 @@ export default function Transactions() {
             />
           </label>
         </div>
-        {hasActiveFilter && (
-          <button className="secondary" onClick={() => setParams({})}>
-            Filter zurücksetzen
+        <div className="form-row" style={{ marginTop: hasActiveFilter ? undefined : 0 }}>
+          {hasActiveFilter && (
+            <button className="secondary" onClick={() => setParams({})}>
+              Filter zurücksetzen
+            </button>
+          )}
+          <button
+            className="secondary"
+            onClick={exportCsv}
+            disabled={!filterAccount}
+            title={filterAccount ? undefined : "Bitte zuerst ein Konto im Filter wählen"}
+          >
+            CSV exportieren
           </button>
-        )}
+        </div>
       </div>
 
       {showForm && (

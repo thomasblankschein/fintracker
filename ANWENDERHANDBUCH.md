@@ -86,6 +86,8 @@ Die Navigation links führt zu allen sieben Bereichen der App. Sie ist auf jeder
 ② **Buchung erfassen** — neue Buchung anlegen (siehe [Beispiele 1–3](#beispiel-1-die-erste-buchung-ein-gehaltseingang)).
 ③ **Buchungsliste** — jede Zeile zeigt Datum, Zahlungsempfänger, Beschreibung und alle beteiligten Konten mit Betrag.
 
+**CSV exportieren:** Sobald in der Filterleiste ein **Konto** gewählt ist, wird der Button „CSV exportieren" aktiv (ohne Kontofilter ist er deaktiviert, da die Funktion eine eindeutige Sicht auf ein Konto braucht). Der Export enthält je gefilterter Buchung nur den **Anteil des gewählten Kontos** — bei einer Splitbuchung (z. B. Girokonto -18,87 € gegen zwei Kategorien) erscheint in der Betrag-Spalte also -18,87 €, nicht die einzelnen Split-Beträge. Die Gegenkonten stehen zusätzlich als Kontext in einer eigenen Spalte. Ist auch ein Zeitraum gesetzt, landet er im Dateinamen.
+
 ### 3.4 Zahlungsempfänger
 
 ![Zahlungsempfänger](docs/screenshots/zahlungsempfaenger.png)
