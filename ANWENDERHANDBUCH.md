@@ -173,7 +173,7 @@ In der Vorschau werden die Zeilen den passenden Kategorien zugewiesen:
 
 ![Vorschau mit Kategorien](docs/screenshots/import-schritt3-vorschau.png)
 
-① Kategorie je Zeile wählen (bei bekannten Zahlungsempfängern wird automatisch ein Vorschlag gemacht), ② erst dann lässt sich importieren.
+① Kategorie je Zeile wählen (bei bekannten Zahlungsempfängern wird automatisch ein Vorschlag gemacht), ② erst dann lässt sich importieren. Die **Beschreibung ist direkt in der Tabelle bearbeitbar** — praktisch, um vor dem Import noch Ergänzungen am Buchungstext vorzunehmen (z. B. wenn der Bank-Exporttext knapp oder unklar ist); die Änderung betrifft nur die künftige Buchung in Fintracker, nicht die Original-Datei.
 
 **Der eigentliche Nutzen zeigt sich beim nächsten Kontoauszug:**
 

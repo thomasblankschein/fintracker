@@ -164,6 +164,10 @@ export default function Import() {
     setRows((rs) => rs.map((r) => (r.rowIndex === rowIndex ? { ...r, categoryAccountId } : r)));
   };
 
+  const updateRowDescription = (rowIndex: number, description: string) => {
+    setRows((rs) => rs.map((r) => (r.rowIndex === rowIndex ? { ...r, description } : r)));
+  };
+
   const toggleSplitMode = (rowIndex: number) => {
     setRows((rs) =>
       rs.map((r) => {
@@ -480,7 +484,13 @@ export default function Import() {
                   >
                     <td>{r.date ?? `ungültig: ${r.rawDate}`}</td>
                     <td>{r.amountCents !== null ? formatCents(r.amountCents) : "ungültig"}</td>
-                    <td style={{ maxWidth: "22rem", overflowWrap: "anywhere" }}>{r.description}</td>
+                    <td style={{ maxWidth: "22rem" }}>
+                      <input
+                        value={r.description}
+                        onChange={(e) => updateRowDescription(r.rowIndex, e.target.value)}
+                        style={{ width: "100%" }}
+                      />
+                    </td>
                     <td>{r.payeeName ?? "—"}</td>
                     <td>
                       {!r.splitMode ? (
