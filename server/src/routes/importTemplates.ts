@@ -94,6 +94,23 @@ importTemplatesRouter.post("/", (req, res) => {
   }
 });
 
+importTemplatesRouter.patch("/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const { name } = req.body ?? {};
+  if (!name || typeof name !== "string" || !name.trim()) {
+    return res.status(400).json({ error: "Name ist erforderlich." });
+  }
+  try {
+    db.prepare("UPDATE import_templates SET name = ? WHERE id = ?").run(name.trim(), id);
+    res.json({ ok: true });
+  } catch (e: any) {
+    if (String(e.message).includes("UNIQUE")) {
+      return res.status(400).json({ error: "Eine Vorlage mit diesem Namen existiert bereits." });
+    }
+    throw e;
+  }
+});
+
 importTemplatesRouter.delete("/:id", (req, res) => {
   const id = Number(req.params.id);
   db.prepare("DELETE FROM import_templates WHERE id = ?").run(id);

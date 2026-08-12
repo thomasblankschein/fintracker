@@ -189,6 +189,7 @@ Anders als bei den rohen `postings` sind die Vorzeichen hier bereits **nutzerfre
 ```bash
 GET /api/report-configs                       # [{ id, name, accountIds: [2,6,3] }, …]
 POST /api/report-configs                       # {name, accountIds: number[]}
+PATCH /api/report-configs/{id}                 # {name} — umbenennen
 DELETE /api/report-configs/{id}
 ```
 
@@ -219,6 +220,7 @@ Datums-Parser versteht `YYYY-MM-DD`, `DD.MM.YYYY`, `DD/MM/YYYY`; Betrags-Parser 
 ```bash
 GET /api/import-templates
 POST /api/import-templates   # {name, delimiter, hasHeader, skipRows?, mapping: {date:{index,header}, amount:{...}, ...}, defaultAccountId?, skipPatterns?: [{pattern, field}]}
+PATCH /api/import-templates/{id}   # {name} — umbenennen
 DELETE /api/import-templates/{id}
 ```
 

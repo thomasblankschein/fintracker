@@ -544,6 +544,21 @@ paths:
   /import-templates/{id}:
     parameters:
       - $ref: "#/components/parameters/IdParam"
+    patch:
+      tags: [ImportTemplates]
+      summary: Vorlage umbenennen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
     delete:
       tags: [ImportTemplates]
       summary: Vorlage löschen
@@ -581,6 +596,21 @@ paths:
   /report-configs/{id}:
     parameters:
       - $ref: "#/components/parameters/IdParam"
+    patch:
+      tags: [ReportConfigs]
+      summary: Konfiguration umbenennen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
     delete:
       tags: [ReportConfigs]
       summary: Konfiguration löschen

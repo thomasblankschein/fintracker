@@ -329,11 +329,15 @@ export const api = {
     skipPatterns: ImportSkipPattern[];
   }) => request<{ id: number }>("/import-templates", { method: "POST", body: JSON.stringify(data) }),
   deleteImportTemplate: (id: number) => request<{ ok: true }>(`/import-templates/${id}`, { method: "DELETE" }),
+  updateImportTemplate: (id: number, name: string) =>
+    request<{ ok: true }>(`/import-templates/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
 
   getReportConfigs: () => request<ReportAccountConfig[]>("/report-configs"),
   createReportConfig: (data: { name: string; accountIds: number[] }) =>
     request<{ id: number }>("/report-configs", { method: "POST", body: JSON.stringify(data) }),
   deleteReportConfig: (id: number) => request<{ ok: true }>(`/report-configs/${id}`, { method: "DELETE" }),
+  updateReportConfig: (id: number, name: string) =>
+    request<{ ok: true }>(`/report-configs/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
 };
 
 export function formatCents(cents: number): string {

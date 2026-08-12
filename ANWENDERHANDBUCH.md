@@ -123,6 +123,10 @@ Weiter unten auf derselben Seite gibt es zusätzlich die Auswertung **„Geldver
 
 ① Im **Kontenbaum** (nur Aktiva und Passiva werden angezeigt) markiert man per Häkchen seine **liquiden Konten** (z. B. Girokonto, Kreditkarte, Bargeld); ein markiertes Konto schließt seine Unterkonten automatisch mit ein. ② Die Auswahl wird gemerkt und lässt sich zusätzlich unter einem Namen als **Konfiguration speichern** und später über ein Dropdown wieder **laden** — praktisch, um zwischen Betrachtungen zu wechseln (z. B. „nur Girokonto" vs. „alle Alltagskonten"). ③ Die **Mittelherkunft** (Einnahmen usw.) und ④ die **Mittelverwendung**, aufgeteilt in drei Töpfe: **Konsum** (echte Ausgaben), **Vermögensbildung** (Einzahlungen in Sparen/Vorsorge/Depot) und **Schuldentilgung** (Kreditraten). Die beiden letzten verbrauchen das Geld nicht, sondern schichten es nur um bzw. bauen Verbindlichkeiten ab und erhöhen so das Netto-Vermögen. ⑤ Ganz unten die **Netto-Veränderung des liquiden Bestands** (Zuflüsse − Abflüsse). Umbuchungen *zwischen* zwei liquiden Konten (z. B. der Kreditkarten-Ausgleich vom Girokonto) werden automatisch herausgerechnet.
 
+### 3.8 Einstellungen
+
+Verwaltet die beiden Arten von gespeicherten Vorlagen zentral an einer Stelle: **CSV-Import-Vorlagen** (Spalten-Zuordnung + Suchmuster, siehe [3.6](#36-csv-import)) und **Geldverwendungs-Konfigurationen** (gespeicherte Kontenauswahl, siehe [3.7](#37-auswertungen)). Beide Listen lassen sich hier **umbenennen** (Klick auf „Umbenennen" macht den Namen editierbar, Enter speichert, Esc bricht ab) und **löschen** — praktisch zum Aufräumen, ohne dafür extra in den Import-Assistenten oder die Auswertungen wechseln zu müssen. Anlegen einer neuen Vorlage/Konfiguration geschieht weiterhin an Ort und Stelle (Import-Assistent bzw. Geldverwendungs-Auswertung).
+
 ---
 
 ## 4. Beispiele — vom Einfachen zum Komplexen

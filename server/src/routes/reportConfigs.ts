@@ -37,6 +37,23 @@ reportConfigsRouter.post("/", (req, res) => {
   }
 });
 
+reportConfigsRouter.patch("/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const { name } = req.body ?? {};
+  if (!name || typeof name !== "string" || !name.trim()) {
+    return res.status(400).json({ error: "Name ist erforderlich." });
+  }
+  try {
+    db.prepare("UPDATE report_account_configs SET name = ? WHERE id = ?").run(name.trim(), id);
+    res.json({ ok: true });
+  } catch (e: any) {
+    if (String(e.message).includes("UNIQUE")) {
+      return res.status(400).json({ error: "Eine Konfiguration mit diesem Namen existiert bereits." });
+    }
+    throw e;
+  }
+});
+
 reportConfigsRouter.delete("/:id", (req, res) => {
   const id = Number(req.params.id);
   db.prepare("DELETE FROM report_account_configs WHERE id = ?").run(id);

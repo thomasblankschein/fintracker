@@ -178,5 +178,5 @@ server/src/routes/*.ts      one file per resource (accounts, payees, transaction
 server/src/services/        forecast.ts (recurring→occurrence expansion), importParser.ts (CSV/date/amount parsing), similarity.ts (unscharfer Verwendungszweck-Vergleich für Kategorie-Vorschläge)
 server/src/migrations/      plain numbered .sql files, applied in order by db.ts on boot
 client/src/api.ts           typed fetch wrapper — the single source of truth for API shapes on the frontend
-client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1 (Ausnahmen: info = nur Versionsstring in der Sidebar; reportConfigs = kein eigener Nav-Punkt, wird in der Auswertungen-Seite für das Speichern/Laden der liquiden Kontenauswahl genutzt)
+client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1 (Ausnahmen: info = nur Versionsstring in der Sidebar; reportConfigs = kein eigener Nav-Punkt, Speichern/Laden der liquiden Kontenauswahl läuft über die Auswertungen-Seite, Umbenennen/Löschen zusätzlich über Settings.tsx; Settings.tsx = "Einstellungen"-Nav-Punkt ohne eigene Server-Route, verwaltet importTemplates + reportConfigs per Umbenennen/Löschen)
 ```

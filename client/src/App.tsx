@@ -7,6 +7,7 @@ import Payees from "./pages/Payees";
 import Recurring from "./pages/Recurring";
 import Import from "./pages/Import";
 import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
 import { api } from "./api";
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
   { to: "/wiederkehrend", label: "Wiederkehrend" },
   { to: "/import", label: "Import" },
   { to: "/auswertungen", label: "Auswertungen" },
+  { to: "/einstellungen", label: "Einstellungen" },
 ];
 
 export default function App() {
@@ -50,6 +52,7 @@ export default function App() {
           <Route path="/wiederkehrend" element={<Recurring />} />
           <Route path="/import" element={<Import />} />
           <Route path="/auswertungen" element={<Reports />} />
+          <Route path="/einstellungen" element={<Settings />} />
         </Routes>
       </main>
     </div>
