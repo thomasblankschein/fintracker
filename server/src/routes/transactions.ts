@@ -127,6 +127,38 @@ transactionsRouter.get("/", (req, res) => {
   res.json(txs.map((t) => serializeTransaction(t, postingStmt.all(t.id))));
 });
 
+/**
+ * Saldo eines Kontos (+ Unterkonten) vor und nach einem Zeitraum — für den Abgleich mit
+ * Kontoauszügen, die üblicherweise "Alter Kontostand" und "Neuer Kontostand" ausweisen.
+ * endBalance ist der Saldo bis einschließlich `to` (bzw. unbegrenzt = aktueller Saldo, wenn
+ * `to` fehlt). startBalance ist der Saldo vor `from` (bzw. 0, wenn `from` fehlt — dann gibt
+ * es keinen "Vorzeitraum", die Betrachtung beginnt am Anfang der Buchführung).
+ */
+transactionsRouter.get("/balance", (req, res) => {
+  const { account, from, to } = req.query as Record<string, string | undefined>;
+  if (!account) {
+    return res.status(400).json({ error: "account ist erforderlich." });
+  }
+  const accountIds = collectSubtreeIds(Number(account));
+  const placeholders = accountIds.map(() => "?").join(",");
+
+  let endSql = `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM postings WHERE account_id IN (${placeholders})`;
+  const endParams: any[] = [...accountIds];
+  if (to) {
+    endSql += " AND transaction_id IN (SELECT id FROM transactions WHERE date <= ?)";
+    endParams.push(to);
+  }
+  const endBalance = (db.prepare(endSql).get(...endParams) as { total: number }).total;
+
+  let startBalance = 0;
+  if (from) {
+    const startSql = `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM postings WHERE account_id IN (${placeholders}) AND transaction_id IN (SELECT id FROM transactions WHERE date < ?)`;
+    startBalance = (db.prepare(startSql).get(...accountIds, from) as { total: number }).total;
+  }
+
+  res.json({ startBalance, endBalance });
+});
+
 transactionsRouter.get("/:id", (req, res) => {
   const id = Number(req.params.id);
   const t = db

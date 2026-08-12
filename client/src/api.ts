@@ -227,6 +227,13 @@ export const api = {
     postings: { accountId: number; amountCents: number }[];
   }>) => request<{ ok: true }>(`/transactions/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteTransaction: (id: number) => request<{ ok: true }>(`/transactions/${id}`, { method: "DELETE" }),
+  getAccountBalance: (accountId: number, from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    params.set("account", String(accountId));
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    return request<{ startBalance: number; endBalance: number }>(`/transactions/balance?${params.toString()}`);
+  },
 
   getRecurring: () => request<RecurringTemplate[]>("/recurring"),
   createRecurring: (data: {

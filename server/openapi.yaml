@@ -235,6 +235,36 @@ paths:
               schema: { $ref: "#/components/schemas/IdResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
+  /transactions/balance:
+    get:
+      tags: [Transactions]
+      summary: Saldo eines Kontos (+ Unterkonten) vor und nach einem Zeitraum — für den Abgleich mit Kontoauszügen
+      parameters:
+        - name: account
+          in: query
+          required: true
+          description: Konto, dessen Saldo (inkl. Unterkonten rekursiv) berechnet wird
+          schema: { type: integer }
+        - name: from
+          in: query
+          description: Anfangssaldo = Summe aller Postings vor diesem Datum (ohne from ist der Anfangssaldo 0)
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Endsaldo = Summe aller Postings bis einschließlich diesem Datum (ohne to = aktueller Saldo)
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Anfangs- und Endsaldo in Cent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  startBalance: { type: integer }
+                  endBalance: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
   /transactions/{id}:
     parameters:
       - $ref: "#/components/parameters/IdParam"

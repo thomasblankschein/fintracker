@@ -88,6 +88,8 @@ Die Navigation links führt zu allen sieben Bereichen der App. Sie ist auf jeder
 
 **CSV exportieren:** Sobald in der Filterleiste ein **Konto** gewählt ist, wird der Button „CSV exportieren" aktiv (ohne Kontofilter ist er deaktiviert, da die Funktion eine eindeutige Sicht auf ein Konto braucht). Der Export enthält je gefilterter Buchung nur den **Anteil des gewählten Kontos** — bei einer Splitbuchung (z. B. Girokonto -18,87 € gegen zwei Kategorien) erscheint in der Betrag-Spalte also -18,87 €, nicht die einzelnen Split-Beträge. Die Gegenkonten stehen zusätzlich als Kontext in einer eigenen Spalte. Ist auch ein Zeitraum gesetzt, landet er im Dateinamen.
 
+**Anfangs-/Endsaldo:** Ist ein Konto gefiltert, erscheint zusätzlich eine Karte mit **Anfangssaldo**, **Endsaldo** und **Veränderung** — praktisch, um Fintracker mit einem monatlichen Kontoauszug abzugleichen, der üblicherweise "Alter Kontostand" und "Neuer Kontostand" ausweist. Der Endsaldo berücksichtigt alle Buchungen bis zum "Bis"-Datum (ohne Datumsfilter: der aktuelle Kontostand), der Anfangssaldo alle Buchungen vor dem "Von"-Datum (ohne "Von": 0, da es dann keinen Vorzeitraum gibt). Stimmt die Veränderung nicht mit dem Kontoauszug überein, fehlt meist noch eine Buchung im gewählten Zeitraum.
+
 ### 3.4 Zahlungsempfänger
 
 ![Zahlungsempfänger](docs/screenshots/zahlungsempfaenger.png)

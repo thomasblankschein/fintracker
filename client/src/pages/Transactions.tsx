@@ -55,6 +55,7 @@ function slugify(value: string): string {
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [balance, setBalance] = useState<{ startBalance: number; endBalance: number } | null>(null);
   const [tree, setTree] = useState<AccountNode[]>([]);
   const [payees, setPayees] = useState<Payee[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +104,17 @@ export default function Transactions() {
   useEffect(() => {
     load();
   }, [filterAccount, filterPayee, filterFrom, filterTo, filterDescription]);
+
+  useEffect(() => {
+    if (!filterAccount) {
+      setBalance(null);
+      return;
+    }
+    api
+      .getAccountBalance(Number(filterAccount), filterFrom || undefined, filterTo || undefined)
+      .then(setBalance)
+      .catch((e) => setError(e.message));
+  }, [filterAccount, filterFrom, filterTo]);
 
   useEffect(() => {
     api.getAccountsTree().then(setTree).catch((e) => setError(e.message));
@@ -278,6 +290,27 @@ export default function Transactions() {
           </button>
         </div>
       </div>
+
+      {filterAccount && balance && (
+        <div className="card">
+          <div className="grid grid-3">
+            <div className="stat">
+              <span className="label">Anfangssaldo</span>
+              <span className="value">{formatCents(balance.startBalance)}</span>
+            </div>
+            <div className="stat">
+              <span className="label">Endsaldo</span>
+              <span className="value">{formatCents(balance.endBalance)}</span>
+            </div>
+            <div className="stat">
+              <span className="label">Veränderung</span>
+              <span className={`value ${balance.endBalance - balance.startBalance >= 0 ? "amount-positive" : "amount-negative"}`}>
+                {formatCents(balance.endBalance - balance.startBalance)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <form className="card" onSubmit={submit}>

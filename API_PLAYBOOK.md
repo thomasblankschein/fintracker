@@ -115,6 +115,8 @@ GET /api/transactions?description=Tanken   # Volltextsuche (LIKE, ohne Case-Sens
 
 Alle Filter sind kombinierbar (UND-Verknüpfung). `account` schließt **Unterkonten rekursiv mit ein** — filterst du auf "Freizeit & Hobby", bekommst du auch Buchungen auf einem tiefer verschachtelten "Wochenendreisen" darunter (Kontenrahmen sind beliebig tief schachtelbar, siehe Abschnitt 2). `PATCH /transactions/{id}` und `DELETE /transactions/{id}` funktionieren wie erwartet; beim `PATCH` mit `postings` werden **alle** bisherigen Zeilen ersetzt, nicht gemergt.
 
+**Saldo vor/nach einem Zeitraum** (`GET /transactions/balance?account=2&from=2026-07-01&to=2026-07-31`, `account` Pflicht) — für den Abgleich mit Kontoauszügen, die üblicherweise "Alter Kontostand"/"Neuer Kontostand" ausweisen: `{startBalance, endBalance}` in Cent. `endBalance` = Summe aller Postings bis einschließlich `to` (ohne `to`: aktueller Saldo). `startBalance` = Summe aller Postings vor `from` (ohne `from`: `0`, es gibt dann keinen "Vorzeitraum"). `endBalance - startBalance` ergibt automatisch die Summe der im selben Zeitraum gefilterten Buchungen. Schließt wie beim `account`-Filter oben Unterkonten rekursiv ein.
+
 ## 5. Wiederkehrende Zahlungen (`/recurring`)
 
 Eine Vorlage ist strukturell wie eine einfache 2-Zeilen-Buchung, nur mit Wiederholungsregel statt festem Datum:
