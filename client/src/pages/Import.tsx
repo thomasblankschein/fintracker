@@ -178,7 +178,7 @@ export default function Import() {
     }
   };
 
-  const updateRowCategory = (rowIndex: number, categoryAccountId: number) => {
+  const updateRowCategory = (rowIndex: number, categoryAccountId: number | "") => {
     setRows((rs) => rs.map((r) => (r.rowIndex === rowIndex ? { ...r, categoryAccountId } : r)));
   };
 
@@ -566,6 +566,8 @@ export default function Import() {
                             value={r.categoryAccountId}
                             onChange={(id) => updateRowCategory(r.rowIndex, id)}
                             excludeId={defaultAccountId || undefined}
+                            allowEmpty
+                            emptyLabel="Keine Zuordnung"
                           />
                           <button
                             type="button"
