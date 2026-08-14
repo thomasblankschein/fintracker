@@ -255,7 +255,7 @@ paths:
           schema: { type: string, format: date }
       responses:
         "200":
-          description: Anfangs- und Endsaldo in Cent
+          description: Anfangs- und Endsaldo in Cent, plus Tagesverlauf
           content:
             application/json:
               schema:
@@ -263,6 +263,14 @@ paths:
                 properties:
                   startBalance: { type: integer }
                   endBalance: { type: integer }
+                  series:
+                    type: array
+                    description: "Ein Punkt je Tag mit mindestens einer Buchung (kumulativer Saldo nach diesem Tag), plus ein Startpunkt bei from mit startBalance, falls from gesetzt ist. Zwischen zwei Punkten ist der Saldo konstant (stufenförmiger Verlauf)."
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, format: date }
+                        balance: { type: integer }
         "400": { $ref: "#/components/responses/BadRequest" }
 
   /transactions/{id}:

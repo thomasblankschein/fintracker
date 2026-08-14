@@ -232,7 +232,9 @@ export const api = {
     params.set("account", String(accountId));
     if (from) params.set("from", from);
     if (to) params.set("to", to);
-    return request<{ startBalance: number; endBalance: number }>(`/transactions/balance?${params.toString()}`);
+    return request<{ startBalance: number; endBalance: number; series: { date: string; balance: number }[] }>(
+      `/transactions/balance?${params.toString()}`
+    );
   },
 
   getRecurring: () => request<RecurringTemplate[]>("/recurring"),

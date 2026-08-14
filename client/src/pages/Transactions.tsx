@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { api, AccountNode, Payee, Transaction, flattenAccounts, formatCents, parseEuroToCents } from "../api";
 import AccountSelect from "../components/AccountSelect";
 
@@ -55,7 +56,11 @@ function slugify(value: string): string {
 export default function Transactions() {
   const [params, setParams] = useSearchParams();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [balance, setBalance] = useState<{ startBalance: number; endBalance: number } | null>(null);
+  const [balance, setBalance] = useState<{
+    startBalance: number;
+    endBalance: number;
+    series: { date: string; balance: number }[];
+  } | null>(null);
   const [tree, setTree] = useState<AccountNode[]>([]);
   const [payees, setPayees] = useState<Payee[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -309,6 +314,19 @@ export default function Transactions() {
               </span>
             </div>
           </div>
+          {balance.series.length > 1 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={balance.series}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey="date" />
+                <YAxis tickFormatter={(v) => formatCents(v as number)} width={90} />
+                <Tooltip formatter={(v: number) => formatCents(v)} />
+                <Line type="stepAfter" dataKey="balance" stroke="#2563eb" dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="muted">Nicht genug Buchungen im Zeitraum für einen Verlauf.</p>
+          )}
         </div>
       )}
 

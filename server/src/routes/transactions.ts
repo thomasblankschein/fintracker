@@ -156,7 +156,31 @@ transactionsRouter.get("/balance", (req, res) => {
     startBalance = (db.prepare(startSql).get(...accountIds, from) as { total: number }).total;
   }
 
-  res.json({ startBalance, endBalance });
+  let seriesSql = `SELECT t.date AS date, SUM(po.amount_cents) AS delta
+    FROM postings po
+    JOIN transactions t ON t.id = po.transaction_id
+    WHERE po.account_id IN (${placeholders})`;
+  const seriesParams: any[] = [...accountIds];
+  if (from) {
+    seriesSql += " AND t.date >= ?";
+    seriesParams.push(from);
+  }
+  if (to) {
+    seriesSql += " AND t.date <= ?";
+    seriesParams.push(to);
+  }
+  seriesSql += " GROUP BY t.date ORDER BY t.date";
+  const deltas = db.prepare(seriesSql).all(...seriesParams) as { date: string; delta: number }[];
+
+  const series: { date: string; balance: number }[] = [];
+  if (from) series.push({ date: from, balance: startBalance });
+  let running = startBalance;
+  for (const d of deltas) {
+    running += d.delta;
+    series.push({ date: d.date, balance: running });
+  }
+
+  res.json({ startBalance, endBalance, series });
 });
 
 transactionsRouter.get("/:id", (req, res) => {
