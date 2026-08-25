@@ -81,7 +81,7 @@ function serializeTransaction(t: any, postings: any[]) {
 }
 
 transactionsRouter.get("/", (req, res) => {
-  const { account, payee, from, to, description } = req.query as Record<string, string | undefined>;
+  const { account, payee, from, to, description, limit, offset } = req.query as Record<string, string | undefined>;
 
   let txIds: number[] | null = null;
   if (account) {
@@ -95,36 +95,47 @@ transactionsRouter.get("/", (req, res) => {
     ).map((r) => r.id);
   }
 
-  let sql = `SELECT t.*, p.name AS payee_name FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id WHERE 1=1`;
+  let whereSql = "WHERE 1=1";
   const params: any[] = [];
   if (payee) {
-    sql += " AND t.payee_id = ?";
+    whereSql += " AND t.payee_id = ?";
     params.push(Number(payee));
   }
   if (from) {
-    sql += " AND t.date >= ?";
+    whereSql += " AND t.date >= ?";
     params.push(from);
   }
   if (to) {
-    sql += " AND t.date <= ?";
+    whereSql += " AND t.date <= ?";
     params.push(to);
   }
   if (description) {
-    sql += " AND t.description LIKE ?";
+    whereSql += " AND t.description LIKE ?";
     params.push(`%${description}%`);
   }
   if (txIds) {
-    if (txIds.length === 0) return res.json([]);
-    sql += ` AND t.id IN (${txIds.map(() => "?").join(",")})`;
+    if (txIds.length === 0) return res.json({ items: [], total: 0 });
+    whereSql += ` AND t.id IN (${txIds.map(() => "?").join(",")})`;
     params.push(...txIds);
   }
-  sql += " ORDER BY t.date DESC, t.id DESC";
 
-  const txs = db.prepare(sql).all(...params) as any[];
+  const baseFrom = "FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id";
+  const total = (
+    db.prepare(`SELECT COUNT(*) AS total ${baseFrom} ${whereSql}`).get(...params) as { total: number }
+  ).total;
+
+  let sql = `SELECT t.*, p.name AS payee_name ${baseFrom} ${whereSql} ORDER BY t.date DESC, t.id DESC`;
+  const pageParams = [...params];
+  if (limit !== undefined) {
+    sql += " LIMIT ? OFFSET ?";
+    pageParams.push(Number(limit), Number(offset) || 0);
+  }
+
+  const txs = db.prepare(sql).all(...pageParams) as any[];
   const postingStmt = db.prepare(
     `SELECT po.*, a.name AS account_name FROM postings po JOIN accounts a ON a.id = po.account_id WHERE po.transaction_id = ?`
   );
-  res.json(txs.map((t) => serializeTransaction(t, postingStmt.all(t.id))));
+  res.json({ items: txs.map((t) => serializeTransaction(t, postingStmt.all(t.id))), total });
 });
 
 /**

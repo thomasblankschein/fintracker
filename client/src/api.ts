@@ -203,14 +203,22 @@ export const api = {
   deletePayee: (id: number) => request<{ ok: true }>(`/payees/${id}`, { method: "DELETE" }),
 
   getTransactions: (
-    filters: { account?: number; payee?: number; from?: string; to?: string; description?: string } = {}
+    filters: {
+      account?: number;
+      payee?: number;
+      from?: string;
+      to?: string;
+      description?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
   ) => {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(filters)) {
       if (v !== undefined && v !== "") params.set(k, String(v));
     }
     const qs = params.toString();
-    return request<Transaction[]>(`/transactions${qs ? `?${qs}` : ""}`);
+    return request<{ items: Transaction[]; total: number }>(`/transactions${qs ? `?${qs}` : ""}`);
   },
   createTransaction: (data: {
     date: string;

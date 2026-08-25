@@ -105,15 +105,16 @@ Kategorie (Lebensmittel, id 14) bekommt das **positive** Vorzeichen (Ausgabe erh
 
 **Split-Buchung** (eine Zahlung, mehrere Kategorien — z. B. Supermarkt-Einkauf mit Non-Food-Anteil): einfach mehr als zwei `postings` übergeben, solange die Summe 0 bleibt. Es gibt kein Limit auf die Anzahl der Zeilen.
 
-**Filtern & Suchen:**
+**Filtern, Suchen & Paginieren:**
 
 ```bash
 GET /api/transactions?account=2&from=2026-07-01&to=2026-07-31
 GET /api/transactions?payee=3
 GET /api/transactions?description=Tanken   # Volltextsuche (LIKE, ohne Case-Sensitivity)
+GET /api/transactions?limit=50&offset=0    # Seite 1 zu 50 Einträgen
 ```
 
-Alle Filter sind kombinierbar (UND-Verknüpfung). `account` schließt **Unterkonten rekursiv mit ein** — filterst du auf "Freizeit & Hobby", bekommst du auch Buchungen auf einem tiefer verschachtelten "Wochenendreisen" darunter (Kontenrahmen sind beliebig tief schachtelbar, siehe Abschnitt 2). `PATCH /transactions/{id}` und `DELETE /transactions/{id}` funktionieren wie erwartet; beim `PATCH` mit `postings` werden **alle** bisherigen Zeilen ersetzt, nicht gemergt.
+Antwort: `{items: Transaction[], total: number}` — `total` ist die Gesamtzahl der **gefilterten** Treffer, unabhängig von `limit`/`offset`. Ohne `limit` liefert die Route wie bisher alle gefilterten Buchungen auf einmal (z. B. praktisch für einen vollständigen Export). Alle Filter sind kombinierbar (UND-Verknüpfung). `account` schließt **Unterkonten rekursiv mit ein** — filterst du auf "Freizeit & Hobby", bekommst du auch Buchungen auf einem tiefer verschachtelten "Wochenendreisen" darunter (Kontenrahmen sind beliebig tief schachtelbar, siehe Abschnitt 2). `PATCH /transactions/{id}` und `DELETE /transactions/{id}` funktionieren wie erwartet; beim `PATCH` mit `postings` werden **alle** bisherigen Zeilen ersetzt, nicht gemergt.
 
 **Saldo vor/nach einem Zeitraum** (`GET /transactions/balance?account=2&from=2026-07-01&to=2026-07-31`, `account` Pflicht) — für den Abgleich mit Kontoauszügen, die üblicherweise "Alter Kontostand"/"Neuer Kontostand" ausweisen: `{startBalance, endBalance, series}` in Cent. `endBalance` = Summe aller Postings bis einschließlich `to` (ohne `to`: aktueller Saldo). `startBalance` = Summe aller Postings vor `from` (ohne `from`: `0`, es gibt dann keinen "Vorzeitraum"). `endBalance - startBalance` ergibt automatisch die Summe der im selben Zeitraum gefilterten Buchungen. Schließt wie beim `account`-Filter oben Unterkonten rekursiv ein. `series` liefert den Tagesverlauf für eine Grafik: ein Punkt `{date, balance}` je Tag mit mindestens einer Buchung (kumulativer Saldo nach diesem Tag), plus — falls `from` gesetzt ist — ein Startpunkt bei `date=from` mit `balance=startBalance`. Zwischen zwei Punkten ist der Saldo konstant, ein stufenförmiges Liniendiagramm (`type="stepAfter"`) bildet das korrekt ab.
 

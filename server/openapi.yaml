@@ -211,14 +211,26 @@ paths:
           in: query
           description: Freitextsuche in der Buchungsbeschreibung (Teilstring, ohne Beachtung von Groß-/Kleinschreibung)
           schema: { type: string }
+        - name: limit
+          in: query
+          description: Seitengröße für Paginierung — ohne limit werden alle gefilterten Buchungen zurückgegeben (z. B. für den CSV-Export genutzt)
+          schema: { type: integer }
+        - name: offset
+          in: query
+          description: Anzahl zu überspringender Buchungen (nur relevant zusammen mit limit); Default 0
+          schema: { type: integer }
       responses:
         "200":
-          description: Liste der Buchungen
+          description: Seite der Buchungen plus Gesamtzahl der gefilterten Treffer
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: "#/components/schemas/Transaction" }
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Transaction" }
+                  total: { type: integer, description: "Gesamtzahl der gefilterten Buchungen, unabhängig von limit/offset" }
     post:
       tags: [Transactions]
       summary: Neue Buchung erfassen (Postings müssen sich zu 0 summieren)

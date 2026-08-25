@@ -64,6 +64,9 @@ export default function Transactions() {
   const [tree, setTree] = useState<AccountNode[]>([]);
   const [payees, setPayees] = useState<Payee[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [total, setTotal] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -93,7 +96,7 @@ export default function Transactions() {
     setParams(next, { replace: true });
   };
 
-  const load = () => {
+  const load = (targetPage: number = page) => {
     api
       .getTransactions({
         account: filterAccount ? Number(filterAccount) : undefined,
@@ -101,14 +104,24 @@ export default function Transactions() {
         from: filterFrom || undefined,
         to: filterTo || undefined,
         description: filterDescription || undefined,
+        limit: pageSize,
+        offset: (targetPage - 1) * pageSize,
       })
-      .then(setTransactions)
+      .then((res) => {
+        setTransactions(res.items);
+        setTotal(res.total);
+      })
       .catch((e) => setError(e.message));
   };
 
   useEffect(() => {
-    load();
-  }, [filterAccount, filterPayee, filterFrom, filterTo, filterDescription]);
+    setPage(1);
+    load(1);
+  }, [filterAccount, filterPayee, filterFrom, filterTo, filterDescription, pageSize]);
+
+  useEffect(() => {
+    load(page);
+  }, [page]);
 
   useEffect(() => {
     if (!filterAccount) {
@@ -186,10 +199,23 @@ export default function Transactions() {
     }
   };
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     if (!filterAccount) return;
     const accountIds = collectSubtreeIds(Number(filterAccount), flatAccounts);
-    const rows = transactions.map((t) => {
+    const all = await api
+      .getTransactions({
+        account: Number(filterAccount),
+        payee: filterPayee ? Number(filterPayee) : undefined,
+        from: filterFrom || undefined,
+        to: filterTo || undefined,
+        description: filterDescription || undefined,
+      })
+      .catch((e) => {
+        setError(e.message);
+        return null;
+      });
+    if (!all) return;
+    const rows = all.items.map((t) => {
       const own = t.postings.filter((p) => accountIds.includes(p.accountId));
       const counterparts = t.postings.filter((p) => !accountIds.includes(p.accountId));
       const ownAmount = own.reduce((sum, p) => sum + p.amountCents, 0);
@@ -461,6 +487,37 @@ export default function Transactions() {
           </table>
         )}
       </div>
+
+      {total > 0 && (
+        <div className="card">
+          <div className="form-row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+            <label>
+              Buchungen pro Seite
+              <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </label>
+            <span className="muted">
+              Seite {page} von {Math.max(1, Math.ceil(total / pageSize))} ({total} Buchungen)
+            </span>
+            <div className="actions">
+              <button className="secondary" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
+                Zurück
+              </button>
+              <button
+                className="secondary"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page >= Math.ceil(total / pageSize)}
+              >
+                Weiter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
