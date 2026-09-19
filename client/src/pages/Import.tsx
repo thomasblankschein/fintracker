@@ -23,6 +23,10 @@ interface PreviewRow {
   duplicateOf: { transactionId: number; date: string; description: string | null } | null;
   ignored: boolean;
   ignoredByPattern: string | null;
+  excluded: boolean;
+  exclusionId: number | null;
+  userExcluded: boolean;
+  originalDescription: string;
   valid: boolean;
 }
 
@@ -31,7 +35,7 @@ function splitSumCents(splits: SplitEntry[]): number {
 }
 
 function rowIsValid(r: PreviewRow): boolean {
-  if (r.ignored) return false;
+  if (r.ignored || r.excluded || r.userExcluded) return false;
   if (!r.valid || !r.date || r.amountCents === null) return false;
   if (r.splitMode) {
     if (r.splits.length === 0 || r.splits.some((s) => s.accountId === "" || s.amountEuro.trim() === "")) return false;
@@ -62,7 +66,7 @@ export default function Import() {
 
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [defaultAccountId, setDefaultAccountId] = useState<number | "">("");
-  const [result, setResult] = useState<number | null>(null);
+  const [result, setResult] = useState<{ created: number; excluded: number } | null>(null);
 
   useEffect(() => {
     api.getAccountsTree().then(setTree).catch((e) => setError(e.message));
@@ -167,6 +171,8 @@ export default function Import() {
         res.rows.map((r) => ({
           ...r,
           categoryAccountId: r.possibleDuplicate ? "" : r.suggestedCategoryAccountId ?? "",
+          userExcluded: false,
+          originalDescription: r.description,
           splitMode: false,
           splits: [],
         }))
@@ -180,6 +186,23 @@ export default function Import() {
 
   const updateRowCategory = (rowIndex: number, categoryAccountId: number | "") => {
     setRows((rs) => rs.map((r) => (r.rowIndex === rowIndex ? { ...r, categoryAccountId } : r)));
+  };
+
+  const excludeRow = (rowIndex: number) => {
+    setRows((rs) => rs.map((r) => (r.rowIndex === rowIndex ? { ...r, userExcluded: true } : r)));
+  };
+
+  const releaseRow = async (row: PreviewRow) => {
+    try {
+      if (row.excluded && row.exclusionId !== null) {
+        await api.deleteImportExclusion(row.exclusionId);
+      }
+      setRows((rs) =>
+        rs.map((r) => (r.rowIndex === row.rowIndex ? { ...r, excluded: false, exclusionId: null, userExcluded: false } : r))
+      );
+    } catch (e: any) {
+      setError(e.message);
+    }
   };
 
   const updateRowDescription = (rowIndex: number, description: string) => {
@@ -234,7 +257,8 @@ export default function Import() {
       return;
     }
     const validRows = rows.filter(rowIsValid);
-    if (validRows.length === 0) {
+    const newExclusions = rows.filter((r) => r.userExcluded && r.date && r.amountCents !== null);
+    if (validRows.length === 0 && newExclusions.length === 0) {
       setError("Keine Zeilen zum Importieren ausgewählt — allen Zeilen fehlt eine Kategorie (ggf. wurden sie als mögliches Duplikat übersprungen).");
       return;
     }
@@ -250,8 +274,13 @@ export default function Import() {
             ? r.splits.map((s) => ({ accountId: s.accountId as number, amountCents: parseEuroToCents(s.amountEuro) as number }))
             : [{ accountId: r.categoryAccountId as number, amountCents: -(r.amountCents as number) }],
         })),
+        excludedRows: newExclusions.map((r) => ({
+          date: r.date as string,
+          amountCents: r.amountCents as number,
+          description: r.originalDescription,
+        })),
       });
-      setResult(res.created);
+      setResult(res);
       setError(null);
     } catch (e: any) {
       setError(e.message);
@@ -312,6 +341,7 @@ export default function Import() {
   const flatAccounts = flattenAccounts(tree);
   const accountName = (id: number) => flatAccounts.find((a) => a.node.id === id)?.node.name ?? "?";
   const validRowCount = rows.filter(rowIsValid).length;
+  const newExclusionCount = rows.filter((r) => r.userExcluded).length;
 
   return (
     <div>
@@ -539,7 +569,7 @@ export default function Import() {
                   <tr
                     key={r.rowIndex}
                     style={{
-                      opacity: r.ignored || !r.valid ? 0.4 : 1,
+                      opacity: r.ignored || r.excluded || r.userExcluded || !r.valid ? 0.4 : 1,
                       background: r.possibleDuplicate ? "rgba(220,38,38,0.07)" : undefined,
                     }}
                   >
@@ -559,6 +589,23 @@ export default function Import() {
                         <span className="pill" title={`Übersprungen wegen Muster: ${r.ignoredByPattern}`}>
                           Ignoriert
                         </span>
+                      ) : r.excluded || r.userExcluded ? (
+                        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <span
+                            className="pill"
+                            title={r.excluded ? "Bei einem früheren Import dauerhaft ausgeschlossen" : "Wird beim Import dauerhaft ausgeschlossen"}
+                          >
+                            {r.excluded ? "Ausgeschlossen" : "Wird ausgeschlossen"}
+                          </span>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                            onClick={() => releaseRow(r)}
+                          >
+                            Freigeben
+                          </button>
+                        </div>
                       ) : !r.splitMode ? (
                         <>
                           <AccountSelect
@@ -576,6 +623,15 @@ export default function Import() {
                             onClick={() => toggleSplitMode(r.rowIndex)}
                           >
                             Aufteilen
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            style={{ marginTop: "0.35rem", marginLeft: "0.35rem", fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                            onClick={() => excludeRow(r.rowIndex)}
+                            title="Zeile beim nächsten Import derselben Datei automatisch ausblenden"
+                          >
+                            Dauerhaft ausschließen
                           </button>
                         </>
                       ) : (
@@ -665,11 +721,11 @@ export default function Import() {
             <button className="secondary" onClick={reset}>
               Abbrechen
             </button>
-            <button onClick={commit} disabled={validRowCount === 0}>
-              {validRowCount} Buchungen importieren
+            <button onClick={commit} disabled={validRowCount === 0 && newExclusionCount === 0}>
+              {validRowCount} Buchungen importieren{newExclusionCount > 0 ? `, ${newExclusionCount} ausschließen` : ""}
             </button>
           </div>
-          {result !== null && <p>{result} Buchungen wurden importiert. <button className="secondary" onClick={reset}>Neuer Import</button></p>}
+          {result !== null && <p>{result.created} Buchungen wurden importiert{result.excluded > 0 ? `, ${result.excluded} Zeilen dauerhaft ausgeschlossen` : ""}. <button className="secondary" onClick={reset}>Neuer Import</button></p>}
         </div>
       )}
     </div>

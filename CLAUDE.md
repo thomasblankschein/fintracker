@@ -18,7 +18,7 @@ Guidance for Claude Code when working in this repository. Read this first — it
 
 ## Core domain model — read this before touching any booking logic
 
-Only 7 tables: `accounts`, `payees`, `transactions`, `postings`, `recurring_templates`, `import_templates`, `report_account_configs` (letzteres speichert benannte Kontenauswahl-Sets für Auswertungen, z. B. die liquide Gruppe der Geldverwendungs-Analyse). Full detail in DATENMODELL.md. The one thing you must internalize before writing any transaction-related code:
+Only 8 tables: `accounts`, `payees`, `transactions`, `postings`, `recurring_templates`, `import_templates`, `report_account_configs` (benannte Kontenauswahl-Sets für Auswertungen, z. B. die liquide Gruppe der Geldverwendungs-Analyse), `import_exclusions` (dauerhaft ausgeschlossene CSV-Import-Zeilen, Fingerabdruck pro Ziel-Konto). Full detail in DATENMODELL.md. The one thing you must internalize before writing any transaction-related code:
 
 - **Categories are not a separate entity.** They're just `accounts` of type `income`/`expense`. The chart of accounts *is* the category list.
 - **No debit/credit columns.** Each posting has one signed `amount_cents`: **positive = money flows into the account, negative = money flows out.** A transaction is valid iff its postings sum to exactly 0 (≥2 postings).
@@ -178,5 +178,5 @@ server/src/routes/*.ts      one file per resource (accounts, payees, transaction
 server/src/services/        forecast.ts (recurring→occurrence expansion), importParser.ts (CSV/date/amount parsing), similarity.ts (unscharfer Verwendungszweck-Vergleich für Kategorie-Vorschläge)
 server/src/migrations/      plain numbered .sql files, applied in order by db.ts on boot
 client/src/api.ts           typed fetch wrapper — the single source of truth for API shapes on the frontend
-client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1 (Ausnahmen: info = nur Versionsstring in der Sidebar; reportConfigs = kein eigener Nav-Punkt, Speichern/Laden der liquiden Kontenauswahl läuft über die Auswertungen-Seite, Umbenennen/Löschen zusätzlich über Settings.tsx; Settings.tsx = "Einstellungen"-Nav-Punkt ohne eigene Server-Route, verwaltet importTemplates + reportConfigs per Umbenennen/Löschen)
+client/src/pages/*.tsx      one per nav item, matches server/src/routes 1:1 (Ausnahmen: info = nur Versionsstring in der Sidebar; reportConfigs = kein eigener Nav-Punkt, Speichern/Laden der liquiden Kontenauswahl läuft über die Auswertungen-Seite, Umbenennen/Löschen zusätzlich über Settings.tsx; Settings.tsx = "Einstellungen"-Nav-Punkt ohne eigene Server-Route, verwaltet importTemplates + reportConfigs per Umbenennen/Löschen sowie die import_exclusions-Liste (Ausschlüsse selbst laufen über die importRouter-Pfade `/import/exclusions`))
 ```

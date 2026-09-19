@@ -531,7 +531,30 @@ paths:
                 type: object
                 properties:
                   created: { type: integer }
+                  excluded: { type: integer, description: "Neu gespeicherte dauerhafte Ausschlüsse" }
         "400": { $ref: "#/components/responses/BadRequest" }
+
+  /import/exclusions:
+    get:
+      tags: [Import]
+      summary: Dauerhaft ausgeschlossene Import-Zeilen auflisten
+      responses:
+        "200":
+          description: Liste der Ausschlüsse (neueste zuerst)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportExclusion" }
+
+  /import/exclusions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    delete:
+      tags: [Import]
+      summary: Ausschluss aufheben (Zeile erscheint beim nächsten Import wieder normal)
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
 
   /import-templates:
     get:
@@ -1000,6 +1023,8 @@ components:
         duplicateOf:
           allOf: [{ $ref: "#/components/schemas/ImportDuplicateMatch" }]
           nullable: true
+        excluded: { type: boolean, description: "true, wenn die Zeile einem dauerhaften Ausschluss dieses Ziel-Kontos entspricht (Datum + Betrag + normalisierte Beschreibung) — wird nie importiert, Vorschläge/Doubletten-Prüfung entfallen" }
+        exclusionId: { type: integer, nullable: true, description: "ID des zugehörigen Ausschlusses, falls excluded=true" }
         ignored: { type: boolean, description: "true, wenn die Zeile auf ein skipPattern passt — wird nie importiert, Kategorie-Vorschläge/Doubletten-Prüfung werden für diese Zeile nicht berechnet" }
         ignoredByPattern: { type: string, nullable: true, description: "Das zuerst treffende Suchmuster, falls ignored=true" }
         valid: { type: boolean }
@@ -1025,12 +1050,32 @@ components:
 
     ImportCommitInput:
       type: object
-      required: [defaultAccountId, rows]
+      required: [defaultAccountId]
       properties:
         defaultAccountId: { type: integer, description: "Konto, zu dem die importierte CSV gehört (z.B. Girokonto)" }
         rows:
           type: array
           items: { $ref: "#/components/schemas/ImportCommitRow" }
+        excludedRows:
+          type: array
+          description: "Zeilen, die dauerhaft ausgeschlossen werden sollen (in derselben Transaktion gespeichert). rows darf leer sein, wenn excludedRows nicht leer ist."
+          items:
+            type: object
+            required: [date, amountCents]
+            properties:
+              date: { type: string, format: date }
+              amountCents: { type: integer }
+              description: { type: string, description: "Ursprüngliche CSV-Beschreibung (wird serverseitig normalisiert)" }
+
+    ImportExclusion:
+      type: object
+      properties:
+        id: { type: integer }
+        accountId: { type: integer }
+        accountName: { type: string }
+        date: { type: string, format: date }
+        amountCents: { type: integer }
+        description: { type: string, description: "Normalisiert (klein geschrieben, Whitespace zusammengefasst)" }
 
     ImportFieldMapping:
       type: object

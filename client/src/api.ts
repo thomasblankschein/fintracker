@@ -178,6 +178,15 @@ export interface ImportTemplate {
   skipPatterns: ImportSkipPattern[];
 }
 
+export interface ImportExclusion {
+  id: number;
+  accountId: number;
+  accountName: string;
+  date: string;
+  amountCents: number;
+  description: string;
+}
+
 export interface ReportAccountConfig {
   id: number;
   name: string;
@@ -313,6 +322,8 @@ export const api = {
         possibleDuplicate: boolean;
         duplicateOf: { transactionId: number; date: string; description: string | null } | null;
         ignored: boolean;
+        excluded: boolean;
+        exclusionId: number | null;
         ignoredByPattern: string | null;
         valid: boolean;
       }[];
@@ -326,7 +337,10 @@ export const api = {
       payeeName: string | null;
       postings: { accountId: number; amountCents: number }[];
     }[];
-  }) => request<{ created: number }>("/import/commit", { method: "POST", body: JSON.stringify(data) }),
+    excludedRows?: { date: string; amountCents: number; description: string }[];
+  }) => request<{ created: number; excluded: number }>("/import/commit", { method: "POST", body: JSON.stringify(data) }),
+  getImportExclusions: () => request<ImportExclusion[]>("/import/exclusions"),
+  deleteImportExclusion: (id: number) => request<{ ok: true }>(`/import/exclusions/${id}`, { method: "DELETE" }),
 
   getImportTemplates: () => request<ImportTemplate[]>("/import-templates"),
   createImportTemplate: (data: {

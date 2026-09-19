@@ -1,18 +1,27 @@
 import { useEffect, useState } from "react";
-import { api, ImportTemplate, ReportAccountConfig } from "../api";
+import { api, formatCents, ImportExclusion, ImportTemplate, ReportAccountConfig } from "../api";
 
 export default function Settings() {
   const [templates, setTemplates] = useState<ImportTemplate[]>([]);
   const [configs, setConfigs] = useState<ReportAccountConfig[]>([]);
+  const [exclusions, setExclusions] = useState<ImportExclusion[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const loadTemplates = () => api.getImportTemplates().then(setTemplates).catch((e) => setError(e.message));
   const loadConfigs = () => api.getReportConfigs().then(setConfigs).catch((e) => setError(e.message));
 
+  const loadExclusions = () => api.getImportExclusions().then(setExclusions).catch((e) => setError(e.message));
+
   useEffect(() => {
     loadTemplates();
     loadConfigs();
+    loadExclusions();
   }, []);
+
+  const deleteExclusion = async (id: number) => {
+    await api.deleteImportExclusion(id);
+    loadExclusions();
+  };
 
   const renameTemplate = async (id: number, name: string) => {
     try {
@@ -85,6 +94,40 @@ export default function Settings() {
             <tbody>
               {configs.map((c) => (
                 <NameRow key={c.id} id={c.id} name={c.name} onRename={renameConfig} onDelete={deleteConfig} />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Ausgeschlossene Import-Zeilen</h2>
+        {exclusions.length === 0 ? (
+          <p className="muted">Noch keine ausgeschlossenen Zeilen.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Konto</th>
+                <th>Datum</th>
+                <th>Betrag</th>
+                <th>Beschreibung</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {exclusions.map((e) => (
+                <tr key={e.id}>
+                  <td>{e.accountName}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{e.date}</td>
+                  <td>{formatCents(e.amountCents)}</td>
+                  <td>{e.description || "—"}</td>
+                  <td>
+                    <button className="danger" onClick={() => deleteExclusion(e.id)}>
+                      Löschen
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>

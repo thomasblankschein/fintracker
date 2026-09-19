@@ -1,6 +1,6 @@
 # SQLite-Datenmodell
 
-Das Datenmodell besteht aus bewusst nur **7 Tabellen** (5 im Kern-Schema [001_init.sql](server/src/migrations/001_init.sql), plus `import_templates` in [002_import_templates.sql](server/src/migrations/002_import_templates.sql) und `report_account_configs` in [004_report_account_configs.sql](server/src/migrations/004_report_account_configs.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
+Das Datenmodell besteht aus bewusst nur **8 Tabellen** (5 im Kern-Schema [001_init.sql](server/src/migrations/001_init.sql), plus `import_templates` in [002_import_templates.sql](server/src/migrations/002_import_templates.sql), `report_account_configs` in [004_report_account_configs.sql](server/src/migrations/004_report_account_configs.sql) und `import_exclusions` in [006_import_exclusions.sql](server/src/migrations/006_import_exclusions.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
 
 ## ER-Diagramm
 
@@ -53,6 +53,13 @@ erDiagram
         integer default_account_id FK "nullable"
         text skip_patterns "JSON-Array [{pattern,field}], Default '[]'"
     }
+    IMPORT_EXCLUSIONS {
+        integer id PK
+        integer account_id FK "Ziel-Konto der CSV, ON DELETE CASCADE"
+        text date "ISO"
+        integer amount_cents "vorzeichenbehaftet wie in der CSV"
+        text description "normalisiert: klein, Whitespace zusammengefasst"
+    }
     REPORT_ACCOUNT_CONFIGS {
         integer id PK
         text name "UNIQUE"
@@ -67,6 +74,7 @@ erDiagram
     ACCOUNTS ||--o{ RECURRING_TEMPLATES : "from_account_id"
     ACCOUNTS ||--o{ RECURRING_TEMPLATES : "to_account_id"
     ACCOUNTS ||--o{ IMPORT_TEMPLATES : "default_account_id"
+    ACCOUNTS ||--o{ IMPORT_EXCLUSIONS : "account_id"
 ```
 
 ## Tabellen im Detail
@@ -91,6 +99,9 @@ Speichert Spalten-Zuordnung, Trennzeichen und Ziel-Konto für wiederkehrend glei
 
 ### `report_account_configs` — gespeicherte Kontenauswahl für Auswertungen
 Speichert eine benannte Auswahl von Konto-IDs als **JSON-Array** in `account_ids` (analog zum flexiblen JSON-Text in `import_templates.mapping`). Genutzt von der Geldverwendungs-Auswertung (`/reports/money-usage`), um die Gruppe der liquiden Konten einmalig zusammenzustellen und später per Namen wiederzuverwenden — statt sie bei jedem Besuch neu anzuklicken. Bewusst generisch gehalten (`account_ids` ohne festen Bezug zu einem Report-Typ), damit die Tabelle bei künftigen Auswertungen mit Kontenauswahl wiederverwendbar bleibt.
+
+### `import_exclusions` — dauerhaft ausgeschlossene Import-Zeilen
+Merkt sich CSV-Zeilen, die beim Import bewusst **nicht** gebucht werden sollen (z. B. Kreditkarten-Bargeld, das erst später auf dem Girokonto gebucht wird), damit sie beim erneuten Import derselben Datei automatisch als "ausgeschlossen" erscheinen. Das generische CSV-Format hat keine Bank-Transaktions-ID, daher ist der Abgleich ein **Fingerabdruck** aus Ziel-Konto (`account_id`), Datum, Betrag und normalisierter Beschreibung (klein geschrieben, Whitespace zusammengefasst). Der Ausschluss gilt **pro Ziel-Konto**: dieselbe Zeile in einer Girokonto-CSV bleibt unberührt. Es gibt bewusst keine UNIQUE-Bedingung — zwei identische Zeilen am selben Tag werden als zwei Einträge gespeichert, und beim Abgleich wird pro Fingerabdruck nur so oft ausgeschlossen, wie Einträge existieren, sodass eine zweite, nicht ausgeschlossene Doppelzeile nicht mitverschluckt wird. Gespeichert wird die *ursprüngliche* CSV-Beschreibung, nicht ein im Import-Vorschau editierter Text.
 
 ## Kernentscheidung: ein Vorzeichen statt Soll/Haben
 

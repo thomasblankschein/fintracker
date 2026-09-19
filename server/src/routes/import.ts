@@ -181,6 +181,14 @@ function suggestCategoryBySimilarBooking(
   };
 }
 
+function normalizeDescription(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function fingerprint(date: string, amountCents: number, description: string): string {
+  return `${date}|${amountCents}|${normalizeDescription(description)}`;
+}
+
 importRouter.post("/preview", (req, res) => {
   const { csvText, delimiter, mapping, hasHeader, defaultAccountId, skipRows, skipPatterns } = req.body as {
     csvText: string;
@@ -200,6 +208,17 @@ importRouter.post("/preview", (req, res) => {
 
   const allRows = parseCsv(applySkipRows(csvText, Number(skipRows) || 0), delimiter);
   const dataRows = hasHeader ? allRows.slice(1) : allRows;
+
+  // Dauerhafte Ausschlüsse dieses Ziel-Kontos; pro Fingerabdruck wird nur so oft ausgeschlossen,
+  // wie Einträge existieren (identische Doppelzeilen am selben Tag).
+  const exclusionsByKey = new Map<string, number[]>();
+  for (const e of db
+    .prepare("SELECT id, date, amount_cents, description FROM import_exclusions WHERE account_id = ? ORDER BY id")
+    .all(defaultAccountId) as { id: number; date: string; amount_cents: number; description: string }[]) {
+    const key = fingerprint(e.date, e.amount_cents, e.description);
+    if (!exclusionsByKey.has(key)) exclusionsByKey.set(key, []);
+    exclusionsByKey.get(key)!.push(e.id);
+  }
 
   const preview = dataRows.map((row, index) => {
     const rawDate = row[mapping.date] ?? "";
@@ -225,9 +244,35 @@ importRouter.post("/preview", (req, res) => {
         similarBookingOf: null,
         possibleDuplicate: false,
         duplicateOf: null,
+        excluded: false,
+        exclusionId: null,
         ignored: true,
         ignoredByPattern,
         valid: date !== null && amountCents !== null && amountCents !== 0,
+      };
+    }
+
+    const exclusionId =
+      date !== null && amountCents !== null ? exclusionsByKey.get(fingerprint(date, amountCents, description))?.shift() ?? null : null;
+    if (exclusionId !== null) {
+      return {
+        rowIndex: index,
+        date,
+        rawDate,
+        amountCents,
+        description,
+        payeeName: payeeName || null,
+        suggestedCategoryAccountId: null,
+        suggestedCategoryAccountName: null,
+        suggestionSource: null,
+        similarBookingOf: null,
+        possibleDuplicate: false,
+        duplicateOf: null,
+        excluded: true,
+        exclusionId,
+        ignored: false,
+        ignoredByPattern: null,
+        valid: true,
       };
     }
 
@@ -253,6 +298,8 @@ importRouter.post("/preview", (req, res) => {
         : null,
       possibleDuplicate: duplicateOf !== null,
       duplicateOf,
+      excluded: false,
+      exclusionId: null,
       ignored: false,
       ignoredByPattern: null,
       valid: date !== null && amountCents !== null && amountCents !== 0,
@@ -263,8 +310,9 @@ importRouter.post("/preview", (req, res) => {
 });
 
 importRouter.post("/commit", (req, res) => {
-  const { defaultAccountId, rows } = req.body as {
+  const { defaultAccountId, rows, excludedRows = [] } = req.body as {
     defaultAccountId: number;
+    excludedRows?: { date: string; amountCents: number; description: string }[];
     rows: {
       date: string;
       amountCents: number;
@@ -274,8 +322,8 @@ importRouter.post("/commit", (req, res) => {
     }[];
   };
 
-  if (!defaultAccountId || !Array.isArray(rows) || rows.length === 0) {
-    return res.status(400).json({ error: "defaultAccountId und rows sind erforderlich." });
+  if (!defaultAccountId || !Array.isArray(rows) || !Array.isArray(excludedRows) || (rows.length === 0 && excludedRows.length === 0)) {
+    return res.status(400).json({ error: "defaultAccountId und rows (oder excludedRows) sind erforderlich." });
   }
 
   const findOrCreatePayee = (name: string | null): number | null => {
@@ -286,7 +334,18 @@ importRouter.post("/commit", (req, res) => {
   };
 
   let created = 0;
+  let excluded = 0;
   transaction(() => {
+    for (const e of excludedRows) {
+      if (!e.date || typeof e.amountCents !== "number") continue;
+      db.prepare("INSERT INTO import_exclusions (account_id, date, amount_cents, description) VALUES (?, ?, ?, ?)").run(
+        defaultAccountId,
+        e.date,
+        Math.round(e.amountCents),
+        normalizeDescription(e.description ?? "")
+      );
+      excluded++;
+    }
     for (const row of rows) {
       if (!row.date || !row.amountCents || !Array.isArray(row.postings) || row.postings.length === 0) continue;
       if (row.postings.some((p) => !p.accountId || !p.amountCents)) continue;
@@ -314,5 +373,29 @@ importRouter.post("/commit", (req, res) => {
     }
   });
 
-  res.status(201).json({ created });
+  res.status(201).json({ created, excluded });
+});
+
+importRouter.get("/exclusions", (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT e.id, e.account_id, a.name AS account_name, e.date, e.amount_cents, e.description
+       FROM import_exclusions e JOIN accounts a ON a.id = e.account_id ORDER BY e.id DESC`
+    )
+    .all() as any[];
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      accountId: r.account_id,
+      accountName: r.account_name,
+      date: r.date,
+      amountCents: r.amount_cents,
+      description: r.description,
+    }))
+  );
+});
+
+importRouter.delete("/exclusions/:id", (req, res) => {
+  db.prepare("DELETE FROM import_exclusions WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
 });
