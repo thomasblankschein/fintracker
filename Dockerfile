@@ -23,6 +23,7 @@ COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/openapi.yaml ./server/openapi.yaml
 COPY --from=build /app/server/package.json ./server/package.json
 COPY --from=build /app/client/dist ./client/dist
+COPY --from=build /app/client/dist-mobile ./client/dist-mobile
 
-EXPOSE 3001
+EXPOSE 3001 3002
 CMD ["node", "server/dist/index.js"]

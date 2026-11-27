@@ -3,6 +3,7 @@ server/node_modules
 client/node_modules
 server/dist
 client/dist
+client/dist-mobile
 data
 *.db
 *.db-journal

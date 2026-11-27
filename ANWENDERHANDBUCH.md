@@ -127,7 +127,31 @@ Weiter unten auf derselben Seite gibt es zusätzlich die Auswertung **„Geldver
 
 ### 3.8 Einstellungen
 
-Verwaltet gespeicherte Vorlagen und Ausschlüsse zentral an einer Stelle (unten zusätzlich die Liste der **ausgeschlossenen Import-Zeilen** aus [3.6](#36-csv-import), in der sich einzelne Ausschlüsse wieder löschen lassen). Die beiden Arten von Vorlagen: **CSV-Import-Vorlagen** (Spalten-Zuordnung + Suchmuster, siehe [3.6](#36-csv-import)) und **Geldverwendungs-Konfigurationen** (gespeicherte Kontenauswahl, siehe [3.7](#37-auswertungen)). Beide Listen lassen sich hier **umbenennen** (Klick auf „Umbenennen" macht den Namen editierbar, Enter speichert, Esc bricht ab) und **löschen** — praktisch zum Aufräumen, ohne dafür extra in den Import-Assistenten oder die Auswertungen wechseln zu müssen. Anlegen einer neuen Vorlage/Konfiguration geschieht weiterhin an Ort und Stelle (Import-Assistent bzw. Geldverwendungs-Auswertung).
+Verwaltet gespeicherte Vorlagen, Ausschlüsse und die **mobilen Geräte** (siehe [3.9](#39-iphone-erfassung-bargeld-unterwegs)) zentral an einer Stelle (unten zusätzlich die Liste der **ausgeschlossenen Import-Zeilen** aus [3.6](#36-csv-import), in der sich einzelne Ausschlüsse wieder löschen lassen). Die beiden Arten von Vorlagen: **CSV-Import-Vorlagen** (Spalten-Zuordnung + Suchmuster, siehe [3.6](#36-csv-import)) und **Geldverwendungs-Konfigurationen** (gespeicherte Kontenauswahl, siehe [3.7](#37-auswertungen)). Beide Listen lassen sich hier **umbenennen** (Klick auf „Umbenennen" macht den Namen editierbar, Enter speichert, Esc bricht ab) und **löschen** — praktisch zum Aufräumen, ohne dafür extra in den Import-Assistenten oder die Auswertungen wechseln zu müssen. Anlegen einer neuen Vorlage/Konfiguration geschieht weiterhin an Ort und Stelle (Import-Assistent bzw. Geldverwendungs-Auswertung).
+
+### 3.9 iPhone-Erfassung (Bargeld unterwegs)
+
+Bargeld-Ausgaben vergisst man am Desktop schnell. Deshalb gibt es eine **eigene kleine App fürs iPhone**, mit der sich eine Ausgabe in wenigen Sekunden direkt beim Bezahlen erfassen lässt — Betrag, Kategorie, optional eine Notiz, das Datum ist automatisch heute. Sie kann nur das und nichts sonst: keine Salden, keine Auswertungen, keine Änderungen an bestehenden Buchungen.
+
+**Einmalig einrichten** (Details zu Pangolin/Port 3002 stehen in der [README](README.md#iphone-erfassung-bargeld-ausgaben-unterwegs)):
+
+![Einstellungen: Mobile Geräte](docs/screenshots/einstellungen-mobile-geraete.png)
+
+① Unter **Einstellungen → Mobile Geräte → Gerät hinzufügen** einen Namen (z. B. „iPhone Thomas") und das **Bargeldkonto** wählen, auf das dieses Gerät immer bucht, dann **Kopplungscode erzeugen**. ② Der Code erscheint **einmalig** (hier „4325-DDH6"), gilt 10 Minuten und kann nur einmal benutzt werden; die drei Schritte stehen direkt darunter. ③ Die Liste zeigt den Status jedes Geräts — *Wartet auf Kopplung*, *Aktiv* (mit Zeitpunkt der letzten Nutzung und Zahl der erfassten Einträge), *Code abgelaufen* oder *Widerrufen*. ④ **Widerrufen** sperrt ein Gerät sofort (z. B. bei verlorenem iPhone); bereits erfasste Buchungen bleiben erhalten. Ein widerrufenes Gerät lässt sich anschließend mit **Entfernen** aus der Liste nehmen.
+
+Auf dem iPhone die (öffentliche) Adresse der mobilen App in **Safari** öffnen, über *Teilen → Zum Home-Bildschirm* ablegen, die App **vom Home-Bildschirm aus** starten und den Code eintippen. Die Kopplung muss in der installierten App passieren, nicht in Safari — iOS speichert beides getrennt. Danach bleibt das Gerät gekoppelt, es ist nie wieder ein Passwort nötig.
+
+**Im Alltag:**
+
+![iPhone-Erfassung](docs/screenshots/iphone-erfassung.png)
+
+① **Betrag** eintippen (Ziffernblock mit Komma, z. B. „7,90"). ② **Kategorie** antippen — die am häufigsten genutzten stehen als Kacheln oben, alle anderen über „Weitere Kategorien …" (mit Suche). ③ Optional eine **Notiz**. ④ **Speichern** — fertig; eine kurze Meldung bestätigt die Buchung, das Formular ist sofort wieder leer. ⑤ Unter „Zuletzt erfasst" lässt sich ein Eintrag per **Rückgängig** (zweimal antippen, zur Sicherheit) wieder entfernen, solange er höchstens 24 Stunden alt ist.
+
+In der Desktop-App erscheint die Buchung ganz normal unter *Buchungen* — Kategorie als Aufwand, das Bargeldkonto des Geräts als Gegenkonto, ohne Zahlungsempfänger.
+
+**Ohne Netz:** Hat das iPhone gerade keinen Empfang, merkt sich die App den Eintrag („Gespeichert, wird gesendet sobald Netz da ist") und zeigt ihn unter *Wartet auf Senden*. Sobald wieder Verbindung besteht, wird er automatisch gesendet — und zwar garantiert nur einmal, auch wenn die Übertragung zwischendurch abbricht. Einträge, die der Server ablehnt (z. B. weil sie älter als 31 Tage sind), bleiben dort sichtbar markiert und lassen sich verwerfen.
+
+**Sicherheit in Kurzform:** Die mobile App läuft auf einem eigenen Port, über den die restliche Finanz-App nicht erreichbar ist. Jedes iPhone hat ein eigenes, nur auf ihm gespeichertes Zugangstoken (auf dem Server steht davon nur ein Hash), kann ausschließlich auf sein festes Konto buchen, und Beträge über 10.000 € werden abgelehnt.
 
 ---
 

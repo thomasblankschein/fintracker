@@ -3,7 +3,7 @@
 Praxisorientierte Anleitung für alle, die direkt gegen die Finanzen-API sprechen (Skripte, Automatisierungen, eigene Clients). Für das vollständige, formale Referenzblatt aller Endpunkte siehe die interaktive Swagger-UI unter `http://localhost:3001/api-docs` (Spezifikation: [server/openapi.yaml](server/openapi.yaml)). Für das Tabellenschema siehe [DATENMODELL.md](DATENMODELL.md).
 
 - **Base-URL:** `http://localhost:3001/api`
-- **Auth:** keine — lokales Single-User-Tool
+- **Auth:** keine auf Port 3001 — lokales Single-User-Tool, nur im vertrauenswürdigen LAN. Einzige Ausnahme: die mobile Erfassung auf Port 3002 (`/api/m/*`), die per Geräte-Token geschützt ist, siehe Abschnitt 9
 - **Format:** JSON (`Content-Type: application/json`), Fehler immer als `{"error": "Lesbare Meldung"}` mit Status 400/404/500
 - **Geld:** immer Integer-**Cent** (nie Float), z. B. 12,50 € = `1250`
 - **Version:** `GET /api/info` → `{"version": "0.24.1"}`, zur Laufzeit aus `server/package.json` gelesen
@@ -229,7 +229,74 @@ DELETE /api/import-templates/{id}
 
 Das gespeicherte `mapping` trägt pro Feld sowohl `index` als auch `header`. Beim Wiederanwenden auf eine neue Datei zuerst per `header`-Text abgleichen (robust gegen leicht veränderte Spaltenreihenfolge), erst bei fehlendem Treffer auf den gespeicherten `index` zurückfallen — das musst du als API-Nutzer selbst nachbilden, wenn du die Vorlagen ohne die mitgelieferte UI anwendest. `skipPatterns` (Default `[]`) wird beim Speichern validiert: jedes `pattern` muss ein kompilierbarer Regex sein, sonst 400 `"Ungültiges Suchmuster (Regex): <pattern>"`.
 
-## 9. Typische Fehler
+## 9. Mobile Erfassung und Geräteverwaltung (`/mobile-devices`, `/m/*`)
+
+Die iPhone-Erfassung (siehe README, Abschnitt *iPhone-Erfassung*) besteht aus zwei getrennten API-Teilen auf **zwei verschiedenen Ports**:
+
+| Teil | Port | Auth | Zweck |
+|---|---|---|---|
+| `/api/mobile-devices` | 3001 (Hauptapp) | keine (wie der Rest der Hauptapp, nur im LAN) | Geräte koppeln, auflisten, widerrufen |
+| `/api/m/*` | 3002 (eigener Listener) | Header `X-Device-Token` | Erfassung durch das iPhone |
+
+Auf Port 3002 gibt es **nur** `/api/m/*` und die statische App — kein `/api/accounts`, kein `/api-docs`, kein CORS. Das ist Absicht: Nur dieser Port wird über Pangolin ins Internet veröffentlicht.
+
+**Gerät anlegen (Desktop/Admin):**
+
+```bash
+# Bargeld-Konto-ID aus GET /api/accounts/flat; liefert den Kopplungscode genau einmal
+curl -s -X POST http://localhost:3001/api/mobile-devices -H "Content-Type: application/json" \
+  -d '{"name":"iPhone Thomas","accountId":3}'
+# → {"id":1,"code":"2H8A-Q8YM","expiresAt":"2026-11-27 14:46:12","validMinutes":10}
+
+curl -s http://localhost:3001/api/mobile-devices            # Status: pending | expired | active | revoked
+curl -s -X DELETE http://localhost:3001/api/mobile-devices/1            # widerrufen (sofort 401 für das Gerät)
+curl -s -X DELETE "http://localhost:3001/api/mobile-devices/1?remove=1"  # widerrufenes Gerät aus der Liste entfernen
+```
+
+`accountId` muss ein **aktives Aktiva-Konto** sein. Der Code gilt 10 Minuten und einmal; gespeichert wird nur sein SHA-256-Hash. Widerruf löscht Token und Code, lässt aber alle bereits erfassten Buchungen unangetastet.
+
+**Koppeln und erfassen (iPhone bzw. Skript, Port 3002):**
+
+```bash
+# 1. Code gegen Token tauschen (Groß-/Kleinschreibung, Bindestrich und Leerzeichen egal)
+curl -s -X POST http://localhost:3002/api/m/enroll -H "Content-Type: application/json" -d '{"code":"2H8A-Q8YM"}'
+# → {"token":"fmt_…"}   (nur einmal sichtbar; in der DB steht nur der Hash)
+
+TOKEN=fmt_…
+# 2. Startdaten: Kontoname, Kategorien (nach Häufigkeit sortiert), letzte Einträge – keine Salden
+curl -s http://localhost:3002/api/m/bootstrap -H "X-Device-Token: $TOKEN"
+
+# 3. Ausgabe erfassen (12,50 €). clientId erzeugt der Client einmal pro Eintrag (8–64 Zeichen A-Z a-z 0-9 _ -)
+curl -s -X POST http://localhost:3002/api/m/entries -H "X-Device-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"clientId":"c1a2b3c4-d5e6","amountCents":1250,"categoryId":12,"note":"Bäcker","date":"2026-11-27"}'
+# → 201 {"ok":true,"duplicate":false}; dasselbe nochmal → 200 {"ok":true,"duplicate":true}
+
+# 4. Rückgängig (nur eigene Einträge, nur 24 h)
+curl -s -X DELETE http://localhost:3002/api/m/entries/c1a2b3c4-d5e6 -H "X-Device-Token: $TOKEN"
+```
+
+Die Buchung entsteht serverseitig immer als *Aufwandskonto +Betrag / Bargeldkonto des Geräts −Betrag* ohne Zahlungsempfänger; ein im Body mitgeschicktes Konto wird ignoriert. Wiederholtes Senden derselben `clientId` (Offline-Warteschlange!) ist deshalb gefahrlos.
+
+**Grenzen und Fehler:**
+
+| Ursache | Status | Meldung (Auszug) |
+|---|---|---|
+| Token fehlt/unbekannt/widerrufen | 401 | "nicht (mehr) autorisiert" |
+| 10 Fehlversuche in 15 Min von einer IP | 429 | "Zu viele Versuche" (Header `Retry-After`) |
+| Kopplungscode falsch/abgelaufen/benutzt | 400 | "ungültig oder abgelaufen" |
+| 5 falsche Codes in 10 Min (global) | 429 | "Zu viele Versuche" |
+| Betrag < 1 Cent oder > 10.000 € | 400 | "zwischen 0,01 € und 10.000,00 €" |
+| Kategorie ist kein aktives Aufwandskonto (oder die Wurzel) | 400 | "unbekannt oder nicht zulässig" |
+| Notiz > 120 Zeichen | 400 | "höchstens 120 Zeichen" |
+| Datum > 31 Tage zurück oder später als morgen | 400 | "innerhalb der letzten 31 Tage" |
+| mehr als 60 Einträge pro Stunde und Gerät | 429 | "Zu viele Versuche" |
+| Rückgängig: fremder/unbekannter Eintrag | 404 | "nicht gefunden" |
+| Rückgängig: älter als 24 h | 403 | "nur innerhalb von 24 Stunden" |
+| JSON-Body > 8 kB | 413 | "Anfrage zu groß" |
+
+Hinter Pangolin sieht die App ohne Konfiguration nur die IP des Proxys. Die IP-bezogenen Limits greifen deshalb erst richtig, wenn `TRUST_PROXY` (Anzahl der Proxy-Hops, meist `1`) gesetzt ist — **erst** nach Prüfung, dass der Proxy `X-Forwarded-For` mitschickt; sonst ließe sich die Client-IP fälschen.
+
+## 10. Typische Fehler
 
 | Ursache | Status | Meldung (Auszug) |
 |---|---|---|

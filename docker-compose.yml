@@ -2,7 +2,18 @@ services:
   fintracker:
     build: .
     ports:
+      # Hauptapp (Desktop). KEINE Anmeldung -> nur im vertrauenswürdigen LAN betreiben, nie über Pangolin veröffentlichen.
       - "3001:3001"
+      # Mobile Erfassung (iPhone-PWA, eigene Geräte-Authentifizierung). NUR dieser Port gehört in Pangolin.
+      - "3002:3002"
+    environment:
+      # Port der mobilen Erfassung; 0 schaltet sie ab (dann den 3002-Port oben entfernen).
+      - MOBILE_PORT=3002
+      # Anzahl vertrauenswürdiger Proxys vor der App (Pangolin/Traefik = meist 1), damit die Rate-Limits die echte
+      # Client-IP sehen. Erst setzen, wenn geprüft ist, dass X-Forwarded-For ankommt (siehe README). Default: 0.
+      # - TRUST_PROXY=1
+      # Optional: Host-Header auf die öffentliche Adresse beschränken (kommagetrennt), z. B. kasse.example.com
+      # - MOBILE_ALLOWED_HOST=kasse.example.com
     volumes:
       - ./data:/app/data
     restart: unless-stopped

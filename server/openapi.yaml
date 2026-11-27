@@ -3,7 +3,7 @@ info:
   title: Finanzen API
   description: >
     Private Finanzverwaltung mit doppelter Buchhaltung, Kontenrahmen, Zahlungsempfängern,
-    wiederkehrenden Zahlungen, Prognosen und CSV-Import.
+    wiederkehrenden Zahlungen, Prognosen und CSV-Import. Die mobile Erfassung (Tag Mobile) läuft auf einem eigenen Port.
   version: "0.24.1"
 servers:
   - url: /api
@@ -19,6 +19,13 @@ tags:
   - name: Import
   - name: ImportTemplates
   - name: ReportConfigs
+  - name: MobileAdmin
+    description: Verwaltung der iPhone-Geräte (Hauptapp, Port 3001)
+  - name: Mobile
+    description: >
+      Mobile Erfassung. Läuft auf einem eigenen Listener (Port 3002, nur dieser gehört in Pangolin), ohne CORS,
+      Authentifizierung per Header X-Device-Token. Swagger "Try it out" ist hier nicht möglich (anderer Port, kein CORS);
+      Beispiele siehe API_PLAYBOOK.md.
 
 paths:
   /info:
@@ -660,7 +667,229 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
 
+  /mobile-devices:
+    get:
+      tags: [MobileAdmin]
+      summary: Gekoppelte iPhones auflisten (Verwaltung in der Hauptapp)
+      responses:
+        "200":
+          description: Geräte, neueste zuerst. status = pending (Code erzeugt, wartet auf Kopplung), expired (Code abgelaufen), active, revoked.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MobileDevice" }
+    post:
+      tags: [MobileAdmin]
+      summary: Gerät anlegen und Kopplungscode erzeugen
+      description: >
+        Der Klartext-Code wird nur in dieser Antwort geliefert (gespeichert wird nur der SHA-256-Hash).
+        Er gilt 10 Minuten und genau einmal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, accountId]
+              properties:
+                name: { type: string, maxLength: 60, example: iPhone Thomas }
+                accountId: { type: integer, description: "Aktives Aktiva-Konto (z. B. Bargeld), auf das dieses Gerät immer bucht" }
+      responses:
+        "201":
+          description: Kopplungscode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  code: { type: string, example: 2H8A-Q8YM }
+                  expiresAt: { type: string, description: 'UTC "YYYY-MM-DD HH:MM:SS"' }
+                  validMinutes: { type: integer, example: 10 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /mobile-devices/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    delete:
+      tags: [MobileAdmin]
+      summary: Gerät widerrufen (sofort gesperrt) bzw. mit ?remove=1 entfernen
+      description: >
+        Ohne Parameter wird das Gerät widerrufen: Token und Kopplungscode werden gelöscht, das Gerät erhält sofort 401.
+        Bereits erfasste Buchungen bleiben erhalten. Mit `remove=1` wird ein bereits widerrufenes Gerät aus der
+        Liste entfernt (die Buchungen bleiben ebenfalls erhalten).
+      parameters:
+        - name: remove
+          in: query
+          schema: { type: string, enum: ["1"] }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /m/enroll:
+    servers: &mobileServers
+      - url: http://localhost:3002/api
+        description: Mobile Erfassung (eigener Listener, nur dieser Port wird über Pangolin veröffentlicht)
+    post:
+      tags: [Mobile]
+      summary: Gerät mit Kopplungscode koppeln und Geräte-Token erhalten
+      description: >
+        Läuft auf dem Mobile-Port (3002), nicht auf 3001. Der Code wird ohne Rücksicht auf Groß-/Kleinschreibung,
+        Bindestriche und Leerzeichen akzeptiert. Fehlversuche werden global begrenzt (5 pro 10 Minuten).
+        Das Token wird nur einmal ausgeliefert; die App speichert es lokal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, example: 2H8A-Q8YM }
+      responses:
+        "201":
+          description: Gerät gekoppelt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, description: "Geheimes Geräte-Token (fmt_…), danach als Header X-Device-Token senden" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /m/bootstrap:
+    servers: *mobileServers
+    get:
+      tags: [Mobile]
+      summary: Startdaten der App (Kontoname, Ausgabe-Kategorien, zuletzt erfasste Einträge)
+      description: >
+        Kategorien = aktive Aufwandskonten unterhalb der Wurzel, sortiert nach Nutzungshäufigkeit auf dem
+        Bargeldkonto des Geräts in den letzten 90 Tagen. Salden werden nie ausgeliefert.
+      security: [{ DeviceToken: [] }]
+      responses:
+        "200":
+          description: Startdaten
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account:
+                    type: object
+                    properties:
+                      name: { type: string }
+                  deviceName: { type: string }
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        path: { type: string, example: "Freizeit & Hobby › Urlaube & Trips" }
+                        uses: { type: integer }
+                  recent:
+                    type: array
+                    items: { $ref: "#/components/schemas/MobileRecentEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /m/entries:
+    servers: *mobileServers
+    post:
+      tags: [Mobile]
+      summary: Ausgabe erfassen (idempotent über clientId)
+      description: >
+        Bucht Aufwandskonto (+) gegen das feste Bargeldkonto des Geräts (−). Das Konto kann der Client nicht angeben.
+        Wird dieselbe `clientId` erneut gesendet (z. B. aus der Offline-Warteschlange), entsteht keine zweite Buchung;
+        die Antwort lautet dann 200 mit `duplicate: true`. Grenzen: Betrag 1–1.000.000 Cent, Notiz höchstens 120 Zeichen,
+        Datum höchstens 31 Tage zurück und nicht später als morgen, 60 Schreibzugriffe pro Stunde und Gerät.
+      security: [{ DeviceToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, amountCents, categoryId, date]
+              properties:
+                clientId: { type: string, pattern: "^[A-Za-z0-9_-]{8,64}$", description: Vom Gerät erzeugte eindeutige ID }
+                amountCents: { type: integer, minimum: 1, maximum: 1000000 }
+                categoryId: { type: integer }
+                note: { type: string, maxLength: 120 }
+                date: { type: string, format: date }
+      responses:
+        "201":
+          description: Gebucht
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  duplicate: { type: boolean, example: false }
+        "200":
+          description: clientId war bereits verbucht (keine zweite Buchung)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  duplicate: { type: boolean, example: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /m/entries/recent:
+    servers: *mobileServers
+    get:
+      tags: [Mobile]
+      summary: Die letzten 10 eigenen Einträge des Geräts
+      security: [{ DeviceToken: [] }]
+      responses:
+        "200":
+          description: Einträge, neueste zuerst
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MobileRecentEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /m/entries/{clientId}:
+    servers: *mobileServers
+    parameters:
+      - name: clientId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Mobile]
+      summary: Eigenen Eintrag rückgängig machen (nur innerhalb von 24 Stunden)
+      description: Entfernt die Buchung. Fremde oder unbekannte Einträge ergeben 404, zu alte 403.
+      security: [{ DeviceToken: [] }]
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Älter als 24 Stunden
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 components:
+  securitySchemes:
+    DeviceToken:
+      type: apiKey
+      in: header
+      name: X-Device-Token
+      description: Geräte-Token aus POST /m/enroll (fmt_…). Nur auf dem Mobile-Port.
+
   parameters:
     IdParam:
       name: id
@@ -685,6 +914,16 @@ components:
             type: object
             properties:
               ok: { type: boolean }
+    Unauthorized:
+      description: Token fehlt, unbekannt oder widerrufen
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    TooManyRequests:
+      description: Rate-Limit erreicht (Header Retry-After in Sekunden)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
     NotFound:
       description: Nicht gefunden
       content:
@@ -697,6 +936,29 @@ components:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
+    MobileDevice:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        accountId: { type: integer }
+        accountName: { type: string }
+        status: { type: string, enum: [pending, expired, active, revoked] }
+        createdAt: { type: string, description: UTC }
+        lastUsedAt: { type: string, nullable: true, description: UTC }
+        enrollExpiresAt: { type: string, nullable: true, description: "UTC, nur bei status pending" }
+        entryCount: { type: integer }
+
+    MobileRecentEntry:
+      type: object
+      properties:
+        clientId: { type: string }
+        date: { type: string, format: date }
+        note: { type: string, nullable: true }
+        amountCents: { type: integer }
+        categoryName: { type: string, nullable: true }
+        canUndo: { type: boolean, description: Noch innerhalb des 24-Stunden-Fensters }
+
     ErrorResponse:
       type: object
       properties:

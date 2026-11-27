@@ -1,6 +1,6 @@
 # SQLite-Datenmodell
 
-Das Datenmodell besteht aus bewusst nur **8 Tabellen** (5 im Kern-Schema [001_init.sql](server/src/migrations/001_init.sql), plus `import_templates` in [002_import_templates.sql](server/src/migrations/002_import_templates.sql), `report_account_configs` in [004_report_account_configs.sql](server/src/migrations/004_report_account_configs.sql) und `import_exclusions` in [006_import_exclusions.sql](server/src/migrations/006_import_exclusions.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
+Das Datenmodell besteht aus bewusst nur **10 Tabellen** (5 im Kern-Schema [001_init.sql](server/src/migrations/001_init.sql), plus `import_templates` in [002_import_templates.sql](server/src/migrations/002_import_templates.sql), `report_account_configs` in [004_report_account_configs.sql](server/src/migrations/004_report_account_configs.sql) `import_exclusions` in [006_import_exclusions.sql](server/src/migrations/006_import_exclusions.sql) sowie `mobile_devices` und `mobile_entries` in [007_mobile.sql](server/src/migrations/007_mobile.sql)). Kategorien sind keine eigene Entität, sondern normale Konten vom Typ `income`/`expense` im Kontenrahmen — das spart eine Tabelle gegenüber klassischen Finanz-Apps.
 
 ## ER-Diagramm
 
@@ -60,6 +60,24 @@ erDiagram
         integer amount_cents "vorzeichenbehaftet wie in der CSV"
         text description "normalisiert: klein, Whitespace zusammengefasst"
     }
+    MOBILE_DEVICES {
+        integer id PK
+        text name "Anzeigename, z. B. iPhone Thomas"
+        integer account_id FK "festes Bargeldkonto des Geräts"
+        text token_hash "UNIQUE, SHA-256 des Geräte-Tokens, NULL vor Kopplung/nach Widerruf"
+        text enroll_code_hash "SHA-256 des Kopplungscodes, NULL nach Verbrauch"
+        text enroll_expires_at "UTC, 10 Min nach Erzeugung"
+        text created_at
+        text last_used_at "nullable"
+        text revoked_at "nullable"
+    }
+    MOBILE_ENTRIES {
+        integer id PK
+        integer device_id FK "ON DELETE CASCADE"
+        integer transaction_id FK "ON DELETE CASCADE"
+        text client_id "vom Gerät erzeugte ID, UNIQUE je Gerät"
+        text created_at
+    }
     REPORT_ACCOUNT_CONFIGS {
         integer id PK
         text name "UNIQUE"
@@ -102,6 +120,12 @@ Speichert eine benannte Auswahl von Konto-IDs als **JSON-Array** in `account_ids
 
 ### `import_exclusions` — dauerhaft ausgeschlossene Import-Zeilen
 Merkt sich CSV-Zeilen, die beim Import bewusst **nicht** gebucht werden sollen (z. B. Kreditkarten-Bargeld, das erst später auf dem Girokonto gebucht wird), damit sie beim erneuten Import derselben Datei automatisch als "ausgeschlossen" erscheinen. Das generische CSV-Format hat keine Bank-Transaktions-ID, daher ist der Abgleich ein **Fingerabdruck** aus Ziel-Konto (`account_id`), Datum, Betrag und normalisierter Beschreibung (klein geschrieben, Whitespace zusammengefasst). Der Ausschluss gilt **pro Ziel-Konto**: dieselbe Zeile in einer Girokonto-CSV bleibt unberührt. Es gibt bewusst keine UNIQUE-Bedingung — zwei identische Zeilen am selben Tag werden als zwei Einträge gespeichert, und beim Abgleich wird pro Fingerabdruck nur so oft ausgeschlossen, wie Einträge existieren, sodass eine zweite, nicht ausgeschlossene Doppelzeile nicht mitverschluckt wird. Gespeichert wird die *ursprüngliche* CSV-Beschreibung, nicht ein im Import-Vorschau editierter Text.
+
+### `mobile_devices` — gekoppelte iPhones
+Ein Eintrag pro Gerät der mobilen Erfassung (siehe README, Abschnitt *iPhone-Erfassung*). `account_id` ist das **feste Bargeldkonto** des Geräts: Es wird bei der Kopplung gewählt und ist die einzige Gegenbuchung, die das Gerät erzeugen kann — die App kann es nie selbst bestimmen. Geheimnisse werden **nie im Klartext** gespeichert: `token_hash` und `enroll_code_hash` sind SHA-256-Hashes (Token und Code sind zufällig und lang genug, dass ein schneller Hash genügt; ein Passwort-Hash wie scrypt wäre hier nur Overhead). Lebenszyklus: *angelegt* (Kopplungscode gesetzt, `enroll_expires_at` = +10 Minuten) → *aktiv* (Code verbraucht, `token_hash` gesetzt) → *widerrufen* (`revoked_at` gesetzt, beide Hashes gelöscht, das Gerät bekommt sofort 401). Die Buchungen widerrufener Geräte bleiben erhalten.
+
+### `mobile_entries` — vom Handy erfasste Buchungen
+Verknüpft jede über die mobile Erfassung angelegte Buchung (`transaction_id`) mit dem Gerät. Dreifacher Zweck: **Duplikatschutz** — `UNIQUE(device_id, client_id)` macht das erneute Senden eines Warteschlangeneintrags (`client_id` wird auf dem Gerät erzeugt) idempotent; **Berechtigung** — „Rückgängig" ist nur für eigene Einträge des Geräts (und nur 24 Stunden lang) möglich, nicht für beliebige Buchungen; **Nachvollziehbarkeit** — woher eine Buchung stammt. `transactions` selbst bleibt unverändert. Beide Fremdschlüssel sind `ON DELETE CASCADE`: Löscht man eine Buchung in der Desktop-App oder entfernt ein Gerät, verschwindet nur die Verknüpfung, nie umgekehrt eine Buchung durch das Entfernen eines Geräts.
 
 ## Kernentscheidung: ein Vorzeichen statt Soll/Haben
 
