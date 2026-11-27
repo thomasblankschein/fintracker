@@ -6,7 +6,7 @@ Praxisorientierte Anleitung für alle, die direkt gegen die Finanzen-API spreche
 - **Auth:** keine auf Port 3001 — lokales Single-User-Tool, nur im vertrauenswürdigen LAN. Einzige Ausnahme: die mobile Erfassung auf Port 3002 (`/api/m/*`), die per Geräte-Token geschützt ist, siehe Abschnitt 9
 - **Format:** JSON (`Content-Type: application/json`), Fehler immer als `{"error": "Lesbare Meldung"}` mit Status 400/404/500
 - **Geld:** immer Integer-**Cent** (nie Float), z. B. 12,50 € = `1250`
-- **Version:** `GET /api/info` → `{"version": "0.25.0"}`, zur Laufzeit aus `server/package.json` gelesen
+- **Version:** `GET /api/info` → `{"version": "0.25.1"}`, zur Laufzeit aus `server/package.json` gelesen
 
 ## 1. Das Grundprinzip verstehen, bevor du buchst
 
