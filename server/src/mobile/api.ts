@@ -46,7 +46,7 @@ function requireDevice(req: Request, res: Response, next: NextFunction): void {
 
   if (!row || row.revoked_at) {
     authFailures.record(key);
-    res.status(401).json({ error: "Gerät nicht (mehr) autorisiert." });
+    res.status(401).json({ error: "Gerät nicht (mehr) autorisiert.", code: "device_unauthorized" });
     return;
   }
 
@@ -75,6 +75,12 @@ function isRealDate(iso: string): boolean {
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
+
+// Ohne Geheimnis und ohne Datenzugriff: lässt die App prüfen, ob der Server (bzw. ein Proxy davor, z. B. Pangolins
+// Basic-Auth) ihre Zugangsdaten akzeptiert, ohne dafür Kopplungsversuche zu verbrauchen.
+mobileRouter.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
 
 // ---------------------------------------------------------------- Kopplung
 

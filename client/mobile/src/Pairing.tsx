@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { enroll } from "./api";
 import { loadQueue } from "./storage";
 
-export default function Pairing({ onPaired }: { onPaired: (token: string) => void }) {
+export default function Pairing({ onPaired, onOpenBasic }: { onPaired: (token: string) => void; onOpenBasic: () => void }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,6 +50,9 @@ export default function Pairing({ onPaired }: { onPaired: (token: string) => voi
           {busy ? "Koppeln …" : "Koppeln"}
         </button>
       </form>
+      <button type="button" className="link" onClick={onOpenBasic}>
+        Server-Zugangsdaten …
+      </button>
     </main>
   );
 }

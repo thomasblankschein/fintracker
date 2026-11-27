@@ -326,3 +326,13 @@ button {
   background: var(--danger);
   border-color: var(--danger);
 }
+
+.screen form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.field {
+  display: block;
+}

@@ -8,7 +8,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Bargeld" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- use-credentials: hinter Basic-Auth würde der Browser das Manifest sonst ohne Zugangsdaten abrufen (401) -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>Bargeld</title>
   </head>

@@ -15,7 +15,15 @@ import {
 
 const TILE_COUNT = 8;
 
-export default function Capture({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
+export default function Capture({
+  token,
+  onUnauthorized,
+  onOpenBasic,
+}: {
+  token: string;
+  onUnauthorized: () => void;
+  onOpenBasic: () => void;
+}) {
   const [boot, setBoot] = useState<Boot | null>(loadBoot());
   const [queue, setQueue] = useState<QueuedEntry[]>(loadQueue());
   const [recent, setRecent] = useState<RecentEntry[]>(boot?.recent ?? []);
@@ -312,6 +320,10 @@ export default function Capture({ token, onUnauthorized }: { token: string; onUn
           </ul>
         </section>
       )}
+
+      <button type="button" className="link" onClick={onOpenBasic}>
+        Server-Zugangsdaten …
+      </button>
     </main>
   );
 }
