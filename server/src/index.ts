@@ -17,6 +17,8 @@ import { importRouter } from "./routes/import.js";
 import { importTemplatesRouter } from "./routes/importTemplates.js";
 import { reportConfigsRouter } from "./routes/reportConfigs.js";
 import { infoRouter } from "./routes/info.js";
+import { mobileDevicesRouter } from "./routes/mobileDevices.js";
+import { startMobileServer } from "./mobile/server.js";
 
 seedIfEmpty();
 
@@ -41,6 +43,7 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/import", importRouter);
 app.use("/api/import-templates", importTemplatesRouter);
 app.use("/api/report-configs", reportConfigsRouter);
+app.use("/api/mobile-devices", mobileDevicesRouter);
 app.use("/api/info", infoRouter);
 
 // Im Produktions-Build (Docker) liefert derselbe Server auch das gebaute Frontend aus,
@@ -64,3 +67,5 @@ app.listen(PORT, () => {
   console.log(`Server läuft auf http://localhost:${PORT}`);
   console.log(`API-Doku (Swagger UI) auf http://localhost:${PORT}/api-docs`);
 });
+
+startMobileServer();
