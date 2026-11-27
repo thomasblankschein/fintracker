@@ -7,7 +7,7 @@
     "client"
   ],
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev": "concurrently -n server,client,mobile -c blue,green,magenta \"npm run dev -w server\" \"npm run dev -w client\" \"npm run dev:mobile -w client\"",
     "build": "npm run build -w client && npm run build -w server"
   },
   "devDependencies": {
