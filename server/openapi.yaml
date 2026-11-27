@@ -760,6 +760,24 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /m/health:
+    servers: *mobileServers
+    get:
+      tags: [Mobile]
+      summary: Erreichbarkeits- und Zugangsdaten-Check (ohne Token)
+      description: >
+        Liefert `{ok: true}`, ohne Token und ohne Datenzugriff. Die App nutzt es, um eingegebene Server-Zugangsdaten
+        (Basic-Auth eines Proxys wie Pangolin davor) zu prüfen, ohne Kopplungsversuche zu verbrauchen.
+      responses:
+        "200":
+          description: Server erreichbar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
   /m/bootstrap:
     servers: *mobileServers
     get:
@@ -915,7 +933,9 @@ components:
             properties:
               ok: { type: boolean }
     Unauthorized:
-      description: Token fehlt, unbekannt oder widerrufen
+      description: >
+        Token fehlt, unbekannt oder widerrufen (`code: device_unauthorized`). Ein 401 ohne diesen Code stammt von einem
+        Proxy davor (z. B. Pangolin Basic Header Auth) und bedeutet nicht, dass das Gerät widerrufen wurde.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -963,6 +983,7 @@ components:
       type: object
       properties:
         error: { type: string }
+        code: { type: string, enum: [device_unauthorized], description: "Nur auf dem Mobile-Port bei 401 des Gerätetoken-Checks" }
 
     IdResponse:
       type: object

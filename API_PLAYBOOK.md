@@ -281,7 +281,7 @@ Die Buchung entsteht serverseitig immer als *Aufwandskonto +Betrag / Bargeldkont
 
 | Ursache | Status | Meldung (Auszug) |
 |---|---|---|
-| Token fehlt/unbekannt/widerrufen | 401 | "nicht (mehr) autorisiert" |
+| Token fehlt/unbekannt/widerrufen | 401 | "nicht (mehr) autorisiert" (`code: "device_unauthorized"`) |
 | 10 Fehlversuche in 15 Min von einer IP | 429 | "Zu viele Versuche" (Header `Retry-After`) |
 | Kopplungscode falsch/abgelaufen/benutzt | 400 | "ungültig oder abgelaufen" |
 | 5 falsche Codes in 10 Min (global) | 429 | "Zu viele Versuche" |
@@ -293,6 +293,8 @@ Die Buchung entsteht serverseitig immer als *Aufwandskonto +Betrag / Bargeldkont
 | Rückgängig: fremder/unbekannter Eintrag | 404 | "nicht gefunden" |
 | Rückgängig: älter als 24 h | 403 | "nur innerhalb von 24 Stunden" |
 | JSON-Body > 8 kB | 413 | "Anfrage zu groß" |
+
+**Basic-Auth vor der App (z. B. Pangolin „Basic Header Auth"):** Ein Proxy davor darf zusätzlich `Authorization: Basic …` verlangen; die App selbst wertet diesen Header nicht aus, sendet ihn aber (wenn in der App Zugangsdaten gespeichert sind) mit jeder Anfrage und unabhängig vom Gerätetoken (`X-Device-Token`). Ein 401 *ohne* `code: "device_unauthorized"` stammt nicht vom Gerätetoken-Check, sondern vom Proxy davor — die mitgelieferte App löscht in diesem Fall ihr Token **nicht**, sondern fragt die Zugangsdaten ab. Eigene Clients sollten es genauso halten. `GET /api/m/health` → `{"ok":true}` ohne Token und ohne Datenzugriff dient dazu, Zugangsdaten zu prüfen, ohne Kopplungsversuche zu verbrauchen.
 
 Hinter Pangolin sieht die App ohne Konfiguration nur die IP des Proxys. Die IP-bezogenen Limits greifen deshalb erst richtig, wenn `TRUST_PROXY` (Anzahl der Proxy-Hops, meist `1`) gesetzt ist — **erst** nach Prüfung, dass der Proxy `X-Forwarded-For` mitschickt; sonst ließe sich die Client-IP fälschen.
 

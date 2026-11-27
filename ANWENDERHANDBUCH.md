@@ -149,6 +149,8 @@ Auf dem iPhone die (öffentliche) Adresse der mobilen App in **Safari** öffnen,
 
 In der Desktop-App erscheint die Buchung ganz normal unter *Buchungen* — Kategorie als Aufwand, das Bargeldkonto des Geräts als Gegenkonto, ohne Zahlungsempfänger.
 
+**Server-Zugangsdaten:** Schützt der Server die App zusätzlich mit Benutzername und Passwort (z. B. „Basic Header Auth" in Pangolin), öffnet sich beim ersten Mal von selbst die Maske **Server-Zugangsdaten**; man erreicht sie jederzeit über „Server-Zugangsdaten …" am Ende des Bildschirms. Die Eingabe wird vor dem Speichern geprüft, bleibt nur auf dem iPhone und wird ab dann bei jeder Anfrage mitgesendet. Ändert sich das Passwort auf dem Server, fragt die App erneut danach — gekoppelt bleibt das Gerät, und vorgemerkte Einträge gehen nicht verloren. „Gespeicherte Zugangsdaten entfernen" löscht sie wieder.
+
 **Ohne Netz:** Hat das iPhone gerade keinen Empfang, merkt sich die App den Eintrag („Gespeichert, wird gesendet sobald Netz da ist") und zeigt ihn unter *Wartet auf Senden*. Sobald wieder Verbindung besteht, wird er automatisch gesendet — und zwar garantiert nur einmal, auch wenn die Übertragung zwischendurch abbricht. Einträge, die der Server ablehnt (z. B. weil sie älter als 31 Tage sind), bleiben dort sichtbar markiert und lassen sich verwerfen.
 
 **Sicherheit in Kurzform:** Die mobile App läuft auf einem eigenen Port, über den die restliche Finanz-App nicht erreichbar ist. Jedes iPhone hat ein eigenes, nur auf ihm gespeichertes Zugangstoken (auf dem Server steht davon nur ein Hash), kann ausschließlich auf sein festes Konto buchen, und Beträge über 10.000 € werden abgelehnt.
