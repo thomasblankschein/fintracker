@@ -187,6 +187,25 @@ export interface ImportExclusion {
   description: string;
 }
 
+export interface MobileDevice {
+  id: number;
+  name: string;
+  accountId: number;
+  accountName: string;
+  status: "pending" | "expired" | "active" | "revoked";
+  createdAt: string;
+  lastUsedAt: string | null;
+  enrollExpiresAt: string | null;
+  entryCount: number;
+}
+
+export interface MobileDeviceEnrollment {
+  id: number;
+  code: string;
+  expiresAt: string;
+  validMinutes: number;
+}
+
 export interface ReportAccountConfig {
   id: number;
   name: string;
@@ -341,6 +360,12 @@ export const api = {
   }) => request<{ created: number; excluded: number }>("/import/commit", { method: "POST", body: JSON.stringify(data) }),
   getImportExclusions: () => request<ImportExclusion[]>("/import/exclusions"),
   deleteImportExclusion: (id: number) => request<{ ok: true }>(`/import/exclusions/${id}`, { method: "DELETE" }),
+
+  getMobileDevices: () => request<MobileDevice[]>("/mobile-devices"),
+  createMobileDevice: (data: { name: string; accountId: number }) =>
+    request<MobileDeviceEnrollment>("/mobile-devices", { method: "POST", body: JSON.stringify(data) }),
+  revokeMobileDevice: (id: number) => request<{ ok: true }>(`/mobile-devices/${id}`, { method: "DELETE" }),
+  removeMobileDevice: (id: number) => request<{ ok: true }>(`/mobile-devices/${id}?remove=1`, { method: "DELETE" }),
 
   getImportTemplates: () => request<ImportTemplate[]>("/import-templates"),
   createImportTemplate: (data: {
